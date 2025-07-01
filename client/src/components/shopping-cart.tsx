@@ -28,29 +28,10 @@ export function ShoppingCartSheet() {
     },
   });
 
-  const checkoutMutation = useMutation({
-    mutationFn: async () => {
-      await apiRequest("POST", "/api/orders/checkout", {
-        paymentMethod: "wallet",
-        needsContent,
-      });
-    },
-    onSuccess: () => {
-      toast({
-        title: "Order Placed",
-        description: "Your order has been placed successfully!",
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/orders"] });
-    },
-    onError: (error) => {
-      toast({
-        title: "Checkout Failed",
-        description: error.message,
-        variant: "destructive",
-      });
-    },
-  });
+  const handleCheckout = () => {
+    // Navigate to checkout page
+    window.location.href = "/checkout";
+  };
 
   const calculateTotals = () => {
     const subtotal = cartItems.reduce((total: number, item: any) => {
@@ -168,10 +149,9 @@ export function ShoppingCartSheet() {
 
             <Button 
               className="w-full mb-3" 
-              onClick={() => checkoutMutation.mutate()}
-              disabled={checkoutMutation.isPending}
+              onClick={handleCheckout}
             >
-              {checkoutMutation.isPending ? 'Processing...' : 'Proceed to Checkout'}
+              Proceed to Checkout
             </Button>
             <Button variant="outline" className="w-full">
               Continue Shopping

@@ -113,6 +113,8 @@ export const orders = pgTable("orders", {
   postUrl: varchar("post_url", { length: 500 }),
   requirements: text("requirements"),
   publisherNotes: text("publisher_notes"),
+  razorpayOrderId: varchar("razorpay_order_id", { length: 100 }),
+  razorpayPaymentId: varchar("razorpay_payment_id", { length: 100 }),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });

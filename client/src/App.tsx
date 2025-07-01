@@ -12,6 +12,7 @@ import BuyerDashboard from "@/pages/buyer-dashboard";
 import PublisherDashboard from "@/pages/publisher-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
 import Orders from "@/pages/orders";
+import Checkout from "@/pages/checkout";
 import WebsiteSubmission from "@/pages/website-submission";
 import NotFound from "@/pages/not-found";
 
@@ -76,6 +77,7 @@ function Router() {
 
           {/* Shared authenticated routes */}
           <Route path="/orders" component={Orders} />
+          <Route path="/checkout" component={Checkout} />
 
           {/* Fallback to role-based dashboard for unknown routes */}
           <Route>

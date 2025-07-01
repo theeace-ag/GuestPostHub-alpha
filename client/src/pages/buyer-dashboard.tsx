@@ -49,6 +49,22 @@ export default function BuyerDashboard() {
 
   const { data: websites = [], isLoading: websitesLoading } = useQuery({
     queryKey: ["/api/websites", searchTerm, filters],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      
+      if (searchTerm) params.append('search', searchTerm);
+      if (filters.categoryId !== "all") params.append('categoryId', filters.categoryId);
+      if (filters.minDA !== "any") params.append('minDA', filters.minDA);
+      if (filters.maxPrice !== "any") params.append('maxPrice', filters.maxPrice);
+      if (filters.language !== "any") params.append('language', filters.language);
+      if (filters.linkType !== "any") params.append('linkType', filters.linkType);
+      
+      const response = await fetch(`/api/websites?${params.toString()}`);
+      if (!response.ok) {
+        throw new Error(`${response.status}: ${response.statusText}`);
+      }
+      return response.json();
+    },
     enabled: isAuthenticated,
     retry: (failureCount, error) => {
       if (isUnauthorizedError(error)) {

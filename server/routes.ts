@@ -4,6 +4,7 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { insertWebsiteSchema, insertCartItemSchema, insertOrderSchema } from "@shared/schema";
 import { z } from "zod";
+import Razorpay from "razorpay";
 
 const websiteFiltersSchema = z.object({
   categoryId: z.coerce.number().optional(),
@@ -15,6 +16,12 @@ const websiteFiltersSchema = z.object({
   linkType: z.string().optional(),
   search: z.string().optional(),
   approvalStatus: z.string().optional(),
+});
+
+// Initialize Razorpay instance
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID || "",
+  key_secret: process.env.RAZORPAY_KEY_SECRET || "",
 });
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -401,6 +408,124 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching all orders:", error);
       res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  // Razorpay payment routes
+  app.post('/api/payment/create-order', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { amount, currency = 'INR' } = req.body;
+
+      if (!amount || amount <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+
+      const options = {
+        amount: Math.round(amount * 100), // Amount in paise
+        currency,
+        receipt: `order_${Date.now()}_${userId}`,
+      };
+
+      const order = await razorpay.orders.create(options);
+      res.json({
+        orderId: order.id,
+        amount: order.amount,
+        currency: order.currency,
+        key: process.env.RAZORPAY_KEY_ID,
+      });
+    } catch (error) {
+      console.error("Error creating Razorpay order:", error);
+      res.status(500).json({ message: "Failed to create payment order" });
+    }
+  });
+
+  app.post('/api/payment/verify', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+      const crypto = require('crypto');
+      const expected_signature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+        .update(razorpay_order_id + '|' + razorpay_payment_id)
+        .digest('hex');
+
+      if (expected_signature !== razorpay_signature) {
+        return res.status(400).json({ message: "Invalid payment signature" });
+      }
+
+      // Payment verified successfully
+      // Get cart items and create orders
+      const cartItems = await storage.getCartItems(userId);
+      if (cartItems.length === 0) {
+        return res.status(400).json({ message: "Cart is empty" });
+      }
+
+      const orders = [];
+      for (const item of cartItems) {
+        const amount = parseFloat(item.website.pricePerPost);
+        const platformFee = amount * 0.05;
+        const totalAmount = amount + platformFee;
+
+        const orderData = {
+          buyerId: userId,
+          publisherId: item.website.publisherId,
+          websiteId: item.websiteId,
+          amount: amount.toString(),
+          platformFee: platformFee.toString(),
+          totalAmount: totalAmount.toString(),
+          needsContent: item.needsContent || false,
+          status: "pending" as const,
+          razorpayPaymentId: razorpay_payment_id,
+          razorpayOrderId: razorpay_order_id,
+        };
+
+        const order = await storage.createOrder(orderData);
+        orders.push(order);
+
+        // Create transaction
+        await storage.createTransaction({
+          userId,
+          orderId: order.id,
+          type: "debit",
+          amount: totalAmount.toString(),
+          description: `Payment for website ${item.website.url}`,
+        });
+
+        // Notify publisher
+        await storage.createNotification({
+          userId: item.website.publisherId,
+          title: "New Order Received",
+          message: `You have received a new order for ${item.website.url}`,
+          type: "order",
+        });
+
+        // Calculate publisher payment (95% after platform fee)
+        const publisherAmount = amount * 0.95;
+        await storage.updateWalletBalance(item.website.publisherId, publisherAmount.toString());
+        
+        // Create transaction for publisher
+        await storage.createTransaction({
+          userId: item.website.publisherId,
+          orderId: order.id,
+          type: "credit",
+          amount: publisherAmount.toString(),
+          description: `Earnings from website ${item.website.url}`,
+        });
+      }
+
+      // Clear cart
+      await storage.clearCart(userId);
+
+      res.json({
+        success: true,
+        message: "Payment verified and orders created",
+        orders,
+      });
+    } catch (error) {
+      console.error("Error verifying payment:", error);
+      res.status(500).json({ message: "Failed to verify payment" });
     }
   });
 
