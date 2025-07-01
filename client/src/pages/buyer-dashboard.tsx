@@ -18,13 +18,13 @@ export default function BuyerDashboard() {
   const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
-    categoryId: "",
-    minDA: "",
-    maxDA: "",
-    minPrice: "",
-    maxPrice: "",
-    language: "",
-    linkType: "",
+    categoryId: "all",
+    minDA: "any",
+    maxDA: "any",
+    minPrice: "any",
+    maxPrice: "any",
+    language: "any",
+    linkType: "any",
   });
 
   // Redirect to home if not authenticated
@@ -73,13 +73,13 @@ export default function BuyerDashboard() {
   const resetFilters = () => {
     setSearchTerm("");
     setFilters({
-      categoryId: "",
-      minDA: "",
-      maxDA: "",
-      minPrice: "",
-      maxPrice: "",
-      language: "",
-      linkType: "",
+      categoryId: "all",
+      minDA: "any",
+      maxDA: "any",
+      minPrice: "any",
+      maxPrice: "any",
+      language: "any",
+      linkType: "any",
     });
   };
 
@@ -137,7 +137,7 @@ export default function BuyerDashboard() {
                       <SelectValue placeholder="Any DA" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Any DA</SelectItem>
+                      <SelectItem value="any">Any DA</SelectItem>
                       <SelectItem value="20">DA 20+</SelectItem>
                       <SelectItem value="30">DA 30+</SelectItem>
                       <SelectItem value="50">DA 50+</SelectItem>
@@ -152,7 +152,7 @@ export default function BuyerDashboard() {
                       <SelectValue placeholder="Any Price" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Any Price</SelectItem>
+                      <SelectItem value="any">Any Price</SelectItem>
                       <SelectItem value="50">Under $50</SelectItem>
                       <SelectItem value="100">Under $100</SelectItem>
                       <SelectItem value="250">Under $250</SelectItem>
@@ -169,7 +169,7 @@ export default function BuyerDashboard() {
                       <SelectValue placeholder="All Categories" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">All Categories</SelectItem>
+                      <SelectItem value="all">All Categories</SelectItem>
                       {categories.map((category: any) => (
                         <SelectItem key={category.id} value={category.id.toString()}>
                           {category.name}
@@ -185,7 +185,7 @@ export default function BuyerDashboard() {
                       <SelectValue placeholder="Any Language" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Any Language</SelectItem>
+                      <SelectItem value="any">Any Language</SelectItem>
                       <SelectItem value="en">English</SelectItem>
                       <SelectItem value="es">Spanish</SelectItem>
                       <SelectItem value="fr">French</SelectItem>
@@ -200,7 +200,7 @@ export default function BuyerDashboard() {
                       <SelectValue placeholder="Any" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">Any</SelectItem>
+                      <SelectItem value="any">Any</SelectItem>
                       <SelectItem value="dofollow">Dofollow</SelectItem>
                       <SelectItem value="nofollow">Nofollow</SelectItem>
                     </SelectContent>
