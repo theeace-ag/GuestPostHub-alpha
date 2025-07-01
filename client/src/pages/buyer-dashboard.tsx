@@ -4,13 +4,15 @@ import { useToast } from "@/hooks/use-toast";
 import { Navigation } from "@/components/navigation";
 import { WebsiteCard } from "@/components/website-card";
 import { ShoppingCartSheet } from "@/components/shopping-cart";
+import { RoleSwitcher } from "@/components/role-switcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
-import { Search, Filter } from "lucide-react";
-import { useQuery } from "@tanstack/react-query";
+import { Search, Filter, Settings } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { apiRequest } from "@/lib/queryClient";
 import { Link } from "wouter";
 
 export default function BuyerDashboard() {
@@ -121,6 +123,29 @@ export default function BuyerDashboard() {
                 <p className="text-gray-600">Discover high-authority publishers for your guest posting needs</p>
               </div>
               <div className="mt-4 lg:mt-0 flex items-center space-x-4">
+                {/* Role Switch Buttons - For Testing */}
+                <div className="flex space-x-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      apiRequest("POST", "/api/auth/switch-role", { role: "buyer" })
+                        .then(() => window.location.reload());
+                    }}
+                  >
+                    Buyer
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => {
+                      apiRequest("POST", "/api/auth/switch-role", { role: "publisher" })
+                        .then(() => window.location.reload());
+                    }}
+                  >
+                    Publisher
+                  </Button>
+                </div>
                 <ShoppingCartSheet />
                 <Link href="/orders">
                   <Button>My Orders</Button>

@@ -19,17 +19,16 @@ import NotFound from "@/pages/not-found";
 function Router() {
   const { isAuthenticated, isLoading, user } = useAuth();
 
-  // Handle role assignment after login
+  // Debug user data to check what's being returned
   useEffect(() => {
-    if (isAuthenticated && user) {
-      const selectedRole = localStorage.getItem('selectedRole');
-      if (selectedRole && user.role === 'buyer' && selectedRole !== 'buyer') {
-        // Update user role if different from stored selection
-        // This would typically be handled by the backend during first login
-        localStorage.removeItem('selectedRole');
-      }
+    if (user) {
+      console.log('User data:', user);
+      console.log('User role:', (user as any)?.role);
     }
-  }, [isAuthenticated, user]);
+  }, [user]);
+
+  // Get user role safely
+  const userRole = (user as any)?.role || 'buyer';
 
   return (
     <Switch>
@@ -48,20 +47,20 @@ function Router() {
         <>
           {/* Role-based home routes */}
           <Route path="/">
-            {user?.role === 'buyer' && <BuyerDashboard />}
-            {user?.role === 'publisher' && <PublisherDashboard />}
-            {user?.role === 'admin' && <AdminDashboard />}
+            {userRole === 'buyer' && <BuyerDashboard />}
+            {userRole === 'publisher' && <PublisherDashboard />}
+            {userRole === 'admin' && <AdminDashboard />}
           </Route>
 
           {/* Buyer routes */}
-          {user?.role === 'buyer' && (
+          {userRole === 'buyer' && (
             <>
               <Route path="/buyer" component={BuyerDashboard} />
             </>
           )}
 
           {/* Publisher routes */}
-          {user?.role === 'publisher' && (
+          {userRole === 'publisher' && (
             <>
               <Route path="/publisher" component={PublisherDashboard} />
               <Route path="/website-submission" component={WebsiteSubmission} />
@@ -69,7 +68,7 @@ function Router() {
           )}
 
           {/* Admin routes */}
-          {user?.role === 'admin' && (
+          {userRole === 'admin' && (
             <>
               <Route path="/admin" component={AdminDashboard} />
             </>
@@ -81,9 +80,9 @@ function Router() {
 
           {/* Fallback to role-based dashboard for unknown routes */}
           <Route>
-            {user?.role === 'buyer' && <BuyerDashboard />}
-            {user?.role === 'publisher' && <PublisherDashboard />}
-            {user?.role === 'admin' && <AdminDashboard />}
+            {userRole === 'buyer' && <BuyerDashboard />}
+            {userRole === 'publisher' && <PublisherDashboard />}
+            {userRole === 'admin' && <AdminDashboard />}
             {!user && <NotFound />}
           </Route>
         </>
