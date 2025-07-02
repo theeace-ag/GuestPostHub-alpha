@@ -30,63 +30,57 @@ function Router() {
   // Get user role safely
   const userRole = (user as any)?.role || 'buyer';
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <Switch>
+        <Route path="/" component={Landing} />
+        <Route component={Landing} />
+      </Switch>
+    );
+  }
+
+  // Authenticated user routes
   return (
     <Switch>
-      {isLoading ? (
-        <Route>
-          <div className="min-h-screen flex items-center justify-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
-        </Route>
-      ) : !isAuthenticated ? (
-        <>
-          <Route path="/" component={Landing} />
-          <Route component={Landing} />
-        </>
-      ) : (
-        <>
-          {/* Role-based home routes */}
-          <Route path="/">
-            {userRole === 'buyer' && <BuyerDashboard />}
-            {userRole === 'publisher' && <PublisherDashboard />}
-            {userRole === 'admin' && <AdminDashboard />}
-          </Route>
+      {/* Role-based home route */}
+      <Route path="/">
+        {userRole === 'buyer' ? <BuyerDashboard /> :
+         userRole === 'publisher' ? <PublisherDashboard /> :
+         userRole === 'admin' ? <AdminDashboard /> :
+         <BuyerDashboard />}
+      </Route>
 
-          {/* Buyer routes */}
-          {userRole === 'buyer' && (
-            <>
-              <Route path="/buyer" component={BuyerDashboard} />
-            </>
-          )}
+      {/* Specific role routes */}
+      <Route path="/buyer">
+        {userRole === 'buyer' ? <BuyerDashboard /> : <NotFound />}
+      </Route>
+      
+      <Route path="/publisher">
+        {userRole === 'publisher' ? <PublisherDashboard /> : <NotFound />}
+      </Route>
+      
+      <Route path="/admin">
+        {userRole === 'admin' ? <AdminDashboard /> : <NotFound />}
+      </Route>
 
-          {/* Publisher routes */}
-          {userRole === 'publisher' && (
-            <>
-              <Route path="/publisher" component={PublisherDashboard} />
-              <Route path="/website-submission" component={WebsiteSubmission} />
-            </>
-          )}
+      <Route path="/website-submission">
+        {userRole === 'publisher' ? <WebsiteSubmission /> : <NotFound />}
+      </Route>
 
-          {/* Admin routes */}
-          {userRole === 'admin' && (
-            <>
-              <Route path="/admin" component={AdminDashboard} />
-            </>
-          )}
+      {/* Shared authenticated routes */}
+      <Route path="/orders" component={Orders} />
+      <Route path="/checkout" component={Checkout} />
 
-          {/* Shared authenticated routes */}
-          <Route path="/orders" component={Orders} />
-          <Route path="/checkout" component={Checkout} />
-
-          {/* Fallback to role-based dashboard for unknown routes */}
-          <Route>
-            {userRole === 'buyer' && <BuyerDashboard />}
-            {userRole === 'publisher' && <PublisherDashboard />}
-            {userRole === 'admin' && <AdminDashboard />}
-            {!user && <NotFound />}
-          </Route>
-        </>
-      )}
+      {/* 404 fallback */}
+      <Route component={NotFound} />
     </Switch>
   );
 }

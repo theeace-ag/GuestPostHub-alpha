@@ -8,9 +8,10 @@ import {
   DropdownMenuItem, 
   DropdownMenuTrigger 
 } from "@/components/ui/dropdown-menu";
-import { Bell, ShoppingCart, Wallet, ChevronDown } from "lucide-react";
+import { Bell, ShoppingCart, Wallet, ChevronDown, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
+import { RoleSwitcher } from "@/components/role-switcher";
 
 export function Navigation() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -142,9 +143,46 @@ export function Navigation() {
                       <ChevronDown className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
+                  <DropdownMenuContent align="end" className="w-56">
                     <DropdownMenuItem>Profile</DropdownMenuItem>
                     <DropdownMenuItem>Settings</DropdownMenuItem>
+                    <div className="border-t my-1"></div>
+                    <div className="p-2">
+                      <p className="text-xs text-gray-500 mb-2">Test Role Switch:</p>
+                      <div className="space-y-1">
+                        <DropdownMenuItem 
+                          onClick={() => fetch('/api/auth/switch-role', { 
+                            method: 'POST', 
+                            headers: {'Content-Type': 'application/json'}, 
+                            body: JSON.stringify({role: 'buyer'}) 
+                          }).then(() => window.location.reload())}
+                          className="text-xs"
+                        >
+                          👤 Switch to Buyer
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => fetch('/api/auth/switch-role', { 
+                            method: 'POST', 
+                            headers: {'Content-Type': 'application/json'}, 
+                            body: JSON.stringify({role: 'publisher'}) 
+                          }).then(() => window.location.reload())}
+                          className="text-xs"
+                        >
+                          🏢 Switch to Publisher
+                        </DropdownMenuItem>
+                        <DropdownMenuItem 
+                          onClick={() => fetch('/api/auth/switch-role', { 
+                            method: 'POST', 
+                            headers: {'Content-Type': 'application/json'}, 
+                            body: JSON.stringify({role: 'admin'}) 
+                          }).then(() => window.location.reload())}
+                          className="text-xs"
+                        >
+                          ⚙️ Switch to Admin
+                        </DropdownMenuItem>
+                      </div>
+                    </div>
+                    <div className="border-t my-1"></div>
                     <DropdownMenuItem>
                       <a href="/api/logout" className="w-full">Logout</a>
                     </DropdownMenuItem>

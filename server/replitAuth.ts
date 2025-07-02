@@ -62,12 +62,26 @@ function updateUserSession(
 async function upsertUser(
   claims: any,
 ) {
+  // Check if user already exists
+  const existingUser = await storage.getUser(claims["sub"]);
+  
+  // If user doesn't exist, assign a default role (buyer) or use stored role preference
+  let role = 'buyer'; // default role
+  if (!existingUser) {
+    // You could implement role selection logic here
+    // For now, all new users default to buyer
+    role = 'buyer';
+  } else {
+    role = existingUser.role;
+  }
+
   await storage.upsertUser({
     id: claims["sub"],
     email: claims["email"],
     firstName: claims["first_name"],
     lastName: claims["last_name"],
     profileImageUrl: claims["profile_image_url"],
+    role: role,
   });
 }
 
