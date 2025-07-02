@@ -118,6 +118,13 @@ LinkConnect is a comprehensive guest post marketplace platform that connects adv
 ```
 Changelog:
 - July 01, 2025. Initial setup
+- July 02, 2025. Migration from Replit Agent to Replit environment completed
+  - Fixed database sessions configuration
+  - Set up PostgreSQL with proper schema
+  - Made Razorpay payment integration optional for development
+  - Created distinct role-based dashboards (buyer vs publisher)
+  - Fixed navigation component nested link issues
+  - Added sample categories for testing
 ```
 
 ## User Preferences

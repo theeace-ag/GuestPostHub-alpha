@@ -15,30 +15,24 @@ import {
 import { 
   DollarSign, 
   Globe, 
-  ShoppingBag, 
-  Clock, 
   Plus, 
-  FileText, 
   TrendingUp,
   Edit,
   BarChart3,
-  Home,
-  Menu,
-  X,
-  Search,
-  Settings,
-  Award,
-  CreditCard
+  CreditCard,
+  CheckCircle,
+  Clock,
+  XCircle,
+  ExternalLink,
+  Wrench
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
-import { isUnauthorizedError } from "@/lib/authUtils";
+import { Navigation } from "@/components/navigation";
 import { Link } from "wouter";
 
 export default function PublisherDashboard() {
   const { isAuthenticated, isLoading, user } = useAuth();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState('dashboard');
-  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   // Redirect to home if not authenticated
   useEffect(() => {
@@ -48,394 +42,251 @@ export default function PublisherDashboard() {
         description: "You are logged out. Logging in again...",
         variant: "destructive",
       });
-      setTimeout(() => {
-        window.location.href = "/api/login";
-      }, 500);
-      return;
+      window.location.href = "/api/login";
     }
   }, [isAuthenticated, isLoading, toast]);
 
+  // Fetch publisher's websites
   const { data: websites = [], isLoading: websitesLoading } = useQuery({
-    queryKey: ["/api/publisher/websites"],
-    enabled: isAuthenticated && user?.role === 'publisher',
-    retry: (failureCount, error) => {
-      if (isUnauthorizedError(error)) {
-        toast({
-          title: "Unauthorized",
-          description: "You are logged out. Logging in again...",
-          variant: "destructive",
-        });
-        setTimeout(() => {
-          window.location.href = "/api/login";
-        }, 500);
-        return false;
-      }
-      return failureCount < 3;
-    },
+    queryKey: ['/api/websites', { publisherId: user?.id }],
+    enabled: !!user?.id,
   });
 
-  const { data: orders = [] } = useQuery({
-    queryKey: ["/api/orders"],
-    enabled: isAuthenticated && user?.role === 'publisher',
+  // Fetch publisher's orders (earnings)
+  const { data: orders = [], isLoading: ordersLoading } = useQuery({
+    queryKey: ['/api/orders', { publisherId: user?.id }],
+    enabled: !!user?.id,
   });
 
-  // Calculate stats
-  const totalEarnings = orders
-    .filter((order: any) => order.status === 'completed')
-    .reduce((sum: number, order: any) => sum + parseFloat(order.amount), 0);
-  
-  const activeWebsites = websites.filter((w: any) => w.approvalStatus === 'approved').length;
-  const thisMonthOrders = orders.filter((order: any) => {
-    const orderDate = new Date(order.createdAt);
-    const now = new Date();
-    return orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
-  }).length;
-  
-  const pendingOrders = orders.filter((order: any) => order.status === 'pending').length;
+  // Calculate earnings
+  const totalEarnings = orders.reduce((sum: number, order: any) => {
+    return sum + parseFloat(order.amount || '0');
+  }, 0);
 
-  const sidebarItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'websites', label: 'My Websites', icon: Globe },
-    { id: 'orders', label: 'My Orders', icon: ShoppingBag },
-    { id: 'payouts', label: 'Payouts', icon: CreditCard },
-    { id: 'affiliate', label: 'Affiliate Program', icon: Award },
-    { id: 'seo-tools', label: 'Free SEO Tools', icon: TrendingUp },
-  ];
+  const pendingEarnings = orders
+    .filter((order: any) => order.status === 'pending' || order.status === 'in_progress')
+    .reduce((sum: number, order: any) => sum + parseFloat(order.amount || '0'), 0);
 
   if (isLoading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
   }
 
-  if (!isAuthenticated || user?.role !== 'publisher') {
+  if (!isAuthenticated) {
     return null;
   }
 
-  const renderDashboardContent = () => {
-    switch (activeTab) {
-      case 'dashboard':
-        return (
-          <div className="space-y-6">
-            {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <Card className="bg-gradient-to-br from-cyan-400 to-cyan-600 text-white">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-cyan-100">Total Websites</p>
-                      <p className="text-3xl font-bold">{activeWebsites}</p>
-                    </div>
-                    <Globe className="h-8 w-8 text-cyan-200" />
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="bg-gradient-to-br from-orange-400 to-orange-600 text-white">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-orange-100">Total Orders</p>
-                      <p className="text-3xl font-bold">{thisMonthOrders}</p>
-                      <div className="flex space-x-4 mt-2 text-sm">
-                        <span>0 Completed Orders</span>
-                        <span>{pendingOrders} Pending Orders</span>
-                      </div>
-                    </div>
-                    <ShoppingBag className="h-8 w-8 text-orange-200" />
-                  </div>
-                </CardContent>
-              </Card>
-              
-              <Card className="bg-gradient-to-br from-teal-500 to-teal-700 text-white">
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm text-teal-100">Total Sales</p>
-                      <p className="text-3xl font-bold">${totalEarnings.toFixed(0)}</p>
-                      <p className="text-sm text-teal-200 mt-1">$0 Amount Withdrawn</p>
-                    </div>
-                    <BarChart3 className="h-8 w-8 text-teal-200" />
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        );
-      case 'websites':
-        return (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">My Websites</h2>
-              <Link href="/website-submission">
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Website
-                </Button>
-              </Link>
-            </div>
-            {websitesLoading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                <p className="mt-4 text-gray-600">Loading websites...</p>
-              </div>
-            ) : websites.length === 0 ? (
-              <div className="text-center py-8">
-                <Globe className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900">No websites</h3>
-                <p className="mt-1 text-sm text-gray-500">Get started by adding your first website.</p>
-                <div className="mt-6">
-                  <Link href="/website-submission">
-                    <Button>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Add Website
-                    </Button>
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <Card>
-                <CardContent className="p-0">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Website</TableHead>
-                        <TableHead>Category</TableHead>
-                        <TableHead>DA</TableHead>
-                        <TableHead>Price</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Orders</TableHead>
-                        <TableHead>Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {websites.map((website: any) => (
-                        <TableRow key={website.id}>
-                          <TableCell>
-                            <div className="flex items-center space-x-3">
-                              <div className="w-8 h-8 bg-gray-200 rounded flex items-center justify-center">
-                                <span className="text-xs font-medium">
-                                  {website.url[0]?.toUpperCase()}
-                                </span>
-                              </div>
-                              <div>
-                                <p className="font-medium text-gray-900">{website.url}</p>
-                                <p className="text-sm text-gray-600">
-                                  {website.monthlyTraffic ? `${(website.monthlyTraffic / 1000)}k monthly visits` : 'Traffic data unavailable'}
-                                </p>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-gray-600">
-                            {website.category?.name || 'General'}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {website.domainAuthority || 'N/A'}
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            ${website.pricePerPost}
-                          </TableCell>
-                          <TableCell>
-                            <Badge 
-                              variant={
-                                website.approvalStatus === 'approved' ? 'default' :
-                                website.approvalStatus === 'pending' ? 'secondary' : 'destructive'
-                              }
-                            >
-                              {website.approvalStatus}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="font-medium">
-                            {website.totalOrders || 0}
-                          </TableCell>
-                          <TableCell>
-                            <div className="flex space-x-2">
-                              <Button variant="ghost" size="sm">
-                                <Edit className="h-4 w-4" />
-                              </Button>
-                              <Button variant="ghost" size="sm">
-                                <BarChart3 className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        );
-      case 'orders':
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold">My Orders</h2>
-            <div className="flex space-x-4 mb-4">
-              <Button variant="outline" size="sm">New(0)</Button>
-              <Button variant="outline" size="sm">In Progress(0)</Button>
-              <Button variant="outline" size="sm">Delayed(0)</Button>
-              <Button variant="outline" size="sm">Delivered(0)</Button>
-              <Button variant="default" size="sm">Completed(0)</Button>
-              <Button variant="outline" size="sm">Rejected(0)</Button>
-            </div>
-            <Card>
-              <CardContent className="p-8 text-center">
-                <p className="text-gray-500">No data available in table</p>
-              </CardContent>
-            </Card>
-          </div>
-        );
-      case 'payouts':
-        return (
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold">Payouts</h2>
-            <Card>
-              <CardContent className="p-6">
-                <div className="mb-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <span className="text-sm text-gray-600">paypal@example.com</span>
-                    <Button variant="outline" size="sm">WITHDRAW</Button>
-                  </div>
-                  <p className="text-xs text-gray-500 mb-4">
-                    Note: All withdrawal requests will be paid in your respective PayPal account on the 15th and the 28th of each month.
-                  </p>
-                </div>
-                
-                <div className="grid grid-cols-3 gap-4 mb-6">
-                  <div className="text-center">
-                    <h3 className="font-medium">Balance</h3>
-                    <p className="text-lg">${user?.walletBalance || '0.00'}</p>
-                  </div>
-                  <div className="text-center">
-                    <h3 className="font-medium">Withdrawn</h3>
-                    <p className="text-lg">$0.00</p>
-                  </div>
-                  <div className="text-center bg-orange-100 p-3 rounded">
-                    <h3 className="font-medium">Tax Information</h3>
-                    <Button variant="link" className="text-blue-600 p-0">
-                      Click here to complete your profile to withdraw funds.
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        );
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'approved':
+        return <Badge className="bg-green-100 text-green-800"><CheckCircle className="w-3 h-3 mr-1" />Approved</Badge>;
+      case 'pending':
+        return <Badge className="bg-yellow-100 text-yellow-800"><Clock className="w-3 h-3 mr-1" />Pending</Badge>;
+      case 'rejected':
+        return <Badge className="bg-red-100 text-red-800"><XCircle className="w-3 h-3 mr-1" />Rejected</Badge>;
       default:
-        return <div>Coming soon...</div>;
+        return <Badge variant="secondary">{status}</Badge>;
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
-      {/* Sidebar */}
-      <div className={`${sidebarOpen ? 'w-64' : 'w-16'} bg-slate-800 text-white transition-all duration-300 flex flex-col`}>
-        {/* Logo and Brand */}
-        <div className="p-4 border-b border-slate-700">
-          <div className="flex items-center space-x-3">
-            <div className="bg-blue-600 p-2 rounded">
-              <Globe className="h-6 w-6" />
-            </div>
-            {sidebarOpen && (
-              <span className="font-bold text-lg">Link Publishers</span>
+    <div className="min-h-screen bg-gray-50">
+      <Navigation />
+      
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Welcome Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Publisher Dashboard</h1>
+          <p className="text-gray-600 mt-2">Welcome back, {user?.firstName}! Manage your websites and track your earnings.</p>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Websites</CardTitle>
+              <Globe className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{websites.length}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
+              <DollarSign className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">₹{totalEarnings.toLocaleString()}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Pending Earnings</CardTitle>
+              <Clock className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">₹{pendingEarnings.toLocaleString()}</div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Orders</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{orders.length}</div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex flex-wrap gap-4 mb-8">
+          <Link href="/website-submission">
+            <Button className="flex items-center space-x-2">
+              <Plus className="w-4 h-4" />
+              <span>Add New Website</span>
+            </Button>
+          </Link>
+          
+          <Button variant="outline" className="flex items-center space-x-2">
+            <CreditCard className="w-4 h-4" />
+            <span>Withdraw Earnings</span>
+          </Button>
+
+          <Button variant="outline" className="flex items-center space-x-2">
+            <Wrench className="w-4 h-4" />
+            <span>Free SEO Tools</span>
+          </Button>
+
+          <Button variant="outline" className="flex items-center space-x-2">
+            <BarChart3 className="w-4 h-4" />
+            <span>Analytics</span>
+          </Button>
+        </div>
+
+        {/* Websites Table */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Your Websites</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {websitesLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+              </div>
+            ) : websites.length === 0 ? (
+              <div className="text-center py-8">
+                <Globe className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No websites yet</h3>
+                <p className="text-gray-600 mb-4">Start by adding your first website to the marketplace</p>
+                <Link href="/website-submission">
+                  <Button>
+                    <Plus className="w-4 h-4 mr-2" />
+                    Add Your First Website
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Website</TableHead>
+                    <TableHead>Domain Authority</TableHead>
+                    <TableHead>Price per Post</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Total Orders</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {websites.map((website: any) => (
+                    <TableRow key={website.id}>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <Globe className="w-4 h-4 text-gray-400" />
+                          <div>
+                            <div className="font-medium">{website.url}</div>
+                            <div className="text-sm text-gray-500">{website.category?.name}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{website.domainAuthority}</TableCell>
+                      <TableCell>₹{website.pricePerPost}</TableCell>
+                      <TableCell>{getStatusBadge(website.approvalStatus)}</TableCell>
+                      <TableCell>{website.totalOrders || 0}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center space-x-2">
+                          <Button variant="ghost" size="sm">
+                            <Edit className="w-4 h-4" />
+                          </Button>
+                          <Button variant="ghost" size="sm">
+                            <ExternalLink className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Balance Circle */}
-        <div className="p-4 text-center border-b border-slate-700">
-          <div className="w-20 h-20 bg-white rounded-full mx-auto flex items-center justify-center mb-2">
-            <span className="text-2xl font-bold text-slate-800">${user?.walletBalance ? parseInt(user.walletBalance) : 0}</span>
-          </div>
-          {sidebarOpen && <p className="text-sm text-slate-300">Balance</p>}
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 p-4">
-          <ul className="space-y-2">
-            {sidebarItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <li key={item.id}>
-                  <button
-                    onClick={() => setActiveTab(item.id)}
-                    className={`w-full flex items-center space-x-3 px-3 py-2 rounded transition-colors ${
-                      activeTab === item.id 
-                        ? 'bg-orange-500 text-white' 
-                        : 'text-slate-300 hover:bg-slate-700 hover:text-white'
-                    }`}
-                  >
-                    <Icon className="h-5 w-5" />
-                    {sidebarOpen && <span>{item.label}</span>}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-        </nav>
-
-        {/* User Info */}
-        <div className="p-4 border-t border-slate-700">
-          <div className="flex items-center space-x-3">
-            <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center">
-              <span className="text-xs font-bold">{user?.firstName?.[0] || 'U'}</span>
-            </div>
-            {sidebarOpen && (
-              <div className="flex-1">
-                <p className="text-sm font-medium">{user?.firstName || 'User'}</p>
-                <div className="flex items-center space-x-2">
-                  <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                  <span className="text-xs text-slate-400">Online</span>
-                </div>
+        {/* Recent Orders */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Orders</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {ordersLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
               </div>
+            ) : orders.length === 0 ? (
+              <div className="text-center py-8">
+                <TrendingUp className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No orders yet</h3>
+                <p className="text-gray-600">Orders will appear here once buyers start purchasing from your websites</p>
+              </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Order ID</TableHead>
+                    <TableHead>Website</TableHead>
+                    <TableHead>Buyer</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {orders.slice(0, 5).map((order: any) => (
+                    <TableRow key={order.id}>
+                      <TableCell>#{order.id}</TableCell>
+                      <TableCell>{order.website?.url}</TableCell>
+                      <TableCell>{order.buyer?.firstName} {order.buyer?.lastName}</TableCell>
+                      <TableCell>₹{order.amount}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{order.status}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        {new Date(order.createdAt).toLocaleDateString()}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             )}
-          </div>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-white shadow-sm border-b p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setSidebarOpen(!sidebarOpen)}
-              >
-                <Menu className="h-5 w-5" />
-              </Button>
-              <div>
-                <h1 className="text-xl font-semibold">
-                  {sidebarItems.find(item => item.id === activeTab)?.label || 'Dashboard'}
-                </h1>
-              </div>
-            </div>
-            
-            <div className="flex items-center space-x-4">
-              {/* Tax Information Alert */}
-              <div className="bg-green-100 border border-green-400 px-4 py-2 rounded flex items-center space-x-2">
-                <span className="text-sm text-green-800">Tax information needed</span>
-                <Button variant="link" className="text-blue-600 p-0 h-auto text-sm">
-                  Click here to complete your profile to withdraw funds.
-                </Button>
-              </div>
-              
-              {/* Vacation Mode Toggle */}
-              <div className="flex items-center space-x-2">
-                <span className="text-sm">Vacation Mode</span>
-                <Button variant="outline" size="sm">
-                  <Settings className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </div>
-        </header>
-
-        {/* Content */}
-        <main className="flex-1 p-6 overflow-auto">
-          {renderDashboardContent()}
-        </main>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

@@ -71,13 +71,13 @@ export function Navigation() {
                 <div className="ml-10 flex items-baseline space-x-8">
                   {navLinks.map((link) => (
                     <Link key={link.href} href={link.href}>
-                      <a className={`px-3 py-2 rounded-md text-sm font-medium ${
+                      <span className={`px-3 py-2 rounded-md text-sm font-medium cursor-pointer ${
                         link.active 
                           ? 'text-primary border-b-2 border-primary' 
                           : 'text-gray-500 hover:text-primary'
                       }`}>
                         {link.label}
-                      </a>
+                      </span>
                     </Link>
                   ))}
                 </div>
