@@ -111,7 +111,12 @@ export default function WebsiteSubmission() {
   });
 
   const onSubmit = (data: WebsiteSubmissionForm) => {
-    submitWebsiteMutation.mutate(data);
+    // Convert number to string for decimal field
+    const formData = {
+      ...data,
+      pricePerPost: data.pricePerPost.toString()
+    };
+    submitWebsiteMutation.mutate(formData);
   };
 
   if (isLoading || !isAuthenticated || user?.role !== 'publisher') {
