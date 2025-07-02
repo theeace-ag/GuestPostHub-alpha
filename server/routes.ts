@@ -18,11 +18,14 @@ const websiteFiltersSchema = z.object({
   approvalStatus: z.string().optional(),
 });
 
-// Initialize Razorpay instance
-const razorpay = new Razorpay({
-  key_id: process.env.RAZORPAY_KEY_ID || "",
-  key_secret: process.env.RAZORPAY_KEY_SECRET || "",
-});
+// Initialize Razorpay instance (conditional)
+let razorpay: Razorpay | null = null;
+if (process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET) {
+  razorpay = new Razorpay({
+    key_id: process.env.RAZORPAY_KEY_ID,
+    key_secret: process.env.RAZORPAY_KEY_SECRET,
+  });
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -434,6 +437,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Razorpay payment routes
   app.post('/api/payment/create-order', isAuthenticated, async (req: any, res) => {
     try {
+      if (!razorpay) {
+        return res.status(503).json({ message: "Payment service not configured. Please contact administrator." });
+      }
+
       const userId = req.user.claims.sub;
       const { amount, currency = 'INR' } = req.body;
 
@@ -447,7 +454,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         receipt: `order_${Date.now()}_${userId}`,
       };
 
-      const order = await razorpay.orders.create(options);
+      const order = await razorpay!.orders.create(options);
       res.json({
         orderId: order.id,
         amount: order.amount,
@@ -462,6 +469,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post('/api/payment/verify', isAuthenticated, async (req: any, res) => {
     try {
+      if (!process.env.RAZORPAY_KEY_SECRET) {
+        return res.status(503).json({ message: "Payment service not configured. Please contact administrator." });
+      }
+
       const userId = req.user.claims.sub;
       const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
