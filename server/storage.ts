@@ -303,34 +303,48 @@ export class DatabaseStorage implements IStorage {
     publisherId?: string;
     status?: string;
   }): Promise<(Order & { buyer: User; publisher: User; website: Website })[]> {
-    let query = db
-      .select({
-        ...orders,
-        buyer: { ...users, id: users.id },
-        publisher: { ...users, id: users.id },
-        website: websites,
-      })
-      .from(orders)
-      .innerJoin(users, eq(orders.buyerId, users.id))
-      .innerJoin(websites, eq(orders.websiteId, websites.id));
-
     const conditions = [];
+
+    // Base query with proper joins
+    let baseQuery = db
+      .select()
+      .from(orders)
+      .innerJoin(websites, eq(orders.websiteId, websites.id))
+      .orderBy(desc(orders.createdAt));
 
     if (filters?.buyerId) {
       conditions.push(eq(orders.buyerId, filters.buyerId));
     }
     if (filters?.publisherId) {
-      conditions.push(eq(orders.publisherId, filters.publisherId));
+      conditions.push(eq(websites.publisherId, filters.publisherId));
     }
     if (filters?.status) {
       conditions.push(eq(orders.status, filters.status as any));
     }
 
     if (conditions.length > 0) {
-      query = query.where(and(...conditions));
+      baseQuery = baseQuery.where(and(...conditions));
     }
 
-    return await query.orderBy(desc(orders.createdAt));
+    const rawOrders = await baseQuery;
+    
+    // Manually fetch user data for buyers and publishers
+    const result = [];
+    for (const row of rawOrders) {
+      const buyer = await this.getUser(row.orders.buyerId);
+      const publisher = await this.getUser(row.websites.publisherId);
+      
+      if (buyer && publisher) {
+        result.push({
+          ...row.orders,
+          buyer,
+          publisher,
+          website: row.websites
+        });
+      }
+    }
+
+    return result;
   }
 
   async getOrderById(id: number): Promise<(Order & { buyer: User; publisher: User; website: Website }) | undefined> {

@@ -52,25 +52,62 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
 
   const addFundsMutation = useMutation({
     mutationFn: async (amount: string) => {
-      return await apiRequest("POST", "/api/wallet/add-funds", {
-        amount,
-        paymentMethod: "card",
+      const response = await apiRequest("POST", "/api/wallet/create-order", {
+        amount
       });
+      return response.json();
     },
-    onSuccess: () => {
-      toast({
-        title: "Funds Added",
-        description: `$${addAmount} has been added to your wallet successfully.`,
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/wallet/balance"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/wallet/transactions"] });
-      setAddAmount("");
-      setIsAddOpen(false);
+    onSuccess: (data) => {
+      // Open Razorpay checkout
+      const options = {
+        key: data.key,
+        amount: data.amount,
+        currency: data.currency,
+        name: "LinkConnect",
+        description: "Wallet Top-up",
+        order_id: data.orderId,
+        handler: async function (response: any) {
+          try {
+            await apiRequest("POST", "/api/wallet/verify-payment", {
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            
+            toast({
+              title: "Payment Successful",
+              description: `₹${(data.amount / 100).toFixed(2)} added to your wallet!`,
+            });
+            
+            queryClient.invalidateQueries({ queryKey: ["/api/wallet/balance"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/wallet/transactions"] });
+            setAddAmount("");
+            setIsAddOpen(false);
+            
+          } catch (error: any) {
+            toast({
+              title: "Payment Verification Failed",
+              description: error.message || "Please contact support",
+              variant: "destructive",
+            });
+          }
+        },
+        prefill: {
+          name: user?.firstName || user?.email || "",
+          email: user?.email || "",
+        },
+        theme: {
+          color: "#3B82F6"
+        }
+      };
+
+      const rzp = new (window as any).Razorpay(options);
+      rzp.open();
     },
     onError: (error: any) => {
       toast({
-        title: "Failed to Add Funds",
-        description: error.message || "Something went wrong",
+        title: "Payment Failed",
+        description: error.message || "Failed to create payment order",
         variant: "destructive",
       });
     },

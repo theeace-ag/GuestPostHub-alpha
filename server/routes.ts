@@ -745,19 +745,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post('/api/wallet/add-funds', isAuthenticated, async (req: any, res) => {
+  // Create Razorpay order for wallet funding
+  app.post('/api/wallet/create-order', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const { amount, paymentMethod } = req.body;
-
+      const { amount } = req.body;
+      
       if (!amount || parseFloat(amount) <= 0) {
         return res.status(400).json({ message: "Invalid amount" });
       }
 
-      // Add funds to wallet
+      if (!razorpay) {
+        return res.status(503).json({ message: "Payment service not configured" });
+      }
+
+      const razorpayOrder = await razorpay.orders.create({
+        amount: Math.round(parseFloat(amount) * 100), // Convert to paise
+        currency: "INR",
+        receipt: `wallet_${userId}_${Date.now()}`
+      });
+
+      res.json({
+        orderId: razorpayOrder.id,
+        amount: razorpayOrder.amount,
+        currency: razorpayOrder.currency,
+        key: process.env.RAZORPAY_KEY_ID
+      });
+    } catch (error) {
+      console.error("Razorpay order creation failed:", error);
+      res.status(500).json({ message: "Failed to create payment order" });
+    }
+  });
+
+  // Verify Razorpay payment and add funds to wallet
+  app.post('/api/wallet/verify-payment', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
+
+      if (!razorpay) {
+        return res.status(503).json({ message: "Payment service not configured" });
+      }
+
+      // Verify payment signature
+      const crypto = require('crypto');
+      const expected_signature = crypto
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+        .update(razorpay_order_id + "|" + razorpay_payment_id)
+        .digest('hex');
+
+      if (expected_signature !== razorpay_signature) {
+        return res.status(400).json({ message: "Invalid payment signature" });
+      }
+
+      // Verify payment with Razorpay
+      const payment = await razorpay.payments.fetch(razorpay_payment_id);
+      if (payment.status !== 'captured') {
+        return res.status(400).json({ message: "Payment not captured" });
+      }
+
+      // Add funds to user wallet
+      const actualAmount = (payment.amount / 100).toFixed(2); // Convert from paise
       const currentUser = await storage.getUser(userId);
       const currentBalance = parseFloat(currentUser?.walletBalance || "0");
-      const newBalance = (currentBalance + parseFloat(amount)).toString();
+      const newBalance = (currentBalance + parseFloat(actualAmount)).toFixed(2);
       
       await storage.updateWalletBalance(userId, newBalance);
       
@@ -765,16 +816,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       await storage.createTransaction({
         userId,
         type: "credit",
-        amount: amount.toString(),
-        description: "Wallet funds added",
-        paymentMethod: paymentMethod || "card",
+        amount: actualAmount,
+        description: "Wallet funding via Razorpay",
+        paymentMethod: "razorpay",
+        paymentId: razorpay_payment_id
       });
 
       // Create notification
       await storage.createNotification({
         userId,
         title: "Funds Added",
-        message: `$${parseFloat(amount).toFixed(2)} has been added to your wallet.`,
+        message: `₹${parseFloat(actualAmount).toFixed(2)} has been added to your wallet via Razorpay.`,
         type: "payment",
       });
 
@@ -784,8 +836,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Funds added successfully"
       });
     } catch (error) {
-      console.error("Error adding funds:", error);
-      res.status(500).json({ message: "Failed to add funds" });
+      console.error("Payment verification failed:", error);
+      res.status(500).json({ message: "Payment verification failed" });
     }
   });
 

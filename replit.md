@@ -133,6 +133,13 @@ Changelog:
   - Implemented role change restrictions (only once from settings)
   - Added comprehensive admin API endpoints for website approval workflow
   - Created temporary admin user for testing system
+- July 03, 2025. Real money Razorpay integration and security implementation
+  - CRITICAL: Implemented real Razorpay API integration for wallet funding
+  - CRITICAL: Fixed data isolation issues preventing cross-user data leakage
+  - CRITICAL: Added comprehensive publisher order notification system
+  - Enhanced security with proper payment verification and encrypted storage
+  - Fixed publisher dashboard to show incoming orders properly
+  - Implemented proper user-specific data filtering across all endpoints
 ```
 
 ## User Preferences
