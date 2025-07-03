@@ -147,6 +147,15 @@
   @apply bg-green-100 text-green-800;
 }
 
+/* Razorpay modal z-index fix */
+.razorpay-container {
+  z-index: 99999 !important;
+}
+
+.razorpay-backdrop {
+  z-index: 99998 !important;
+}
+
 .order-status-disputed {
   @apply bg-red-100 text-red-800;
 }

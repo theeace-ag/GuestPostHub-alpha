@@ -106,11 +106,15 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
         order_id: data.orderId,
         handler: async function (response: any) {
           try {
-            await apiRequest("POST", "/api/wallet/verify-payment", {
+            console.log("Payment completed, verifying...", response);
+            
+            const verifyResponse = await apiRequest("POST", "/api/wallet/verify-payment", {
               razorpay_order_id: response.razorpay_order_id,
               razorpay_payment_id: response.razorpay_payment_id,
               razorpay_signature: response.razorpay_signature,
             });
+            
+            console.log("Payment verification successful", verifyResponse);
             
             toast({
               title: "Payment Successful",
@@ -120,9 +124,9 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
             queryClient.invalidateQueries({ queryKey: ["/api/wallet/balance"] });
             queryClient.invalidateQueries({ queryKey: ["/api/wallet/transactions"] });
             setAddAmount("");
-            setIsAddOpen(false);
             
           } catch (error: any) {
+            console.error("Payment verification failed:", error);
             toast({
               title: "Payment Verification Failed",
               description: error.message || "Please contact support",
@@ -136,10 +140,22 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
         },
         theme: {
           color: "#3B82F6"
+        },
+        modal: {
+          ondismiss: function(){
+            toast({
+              title: "Payment Cancelled",
+              description: "Payment was cancelled by user",
+              variant: "destructive",
+            });
+          }
         }
       };
 
       try {
+        // Close the dialog to prevent z-index conflicts
+        setIsAddOpen(false);
+        
         const rzp = new (window as any).Razorpay(options);
         rzp.open();
       } catch (error) {

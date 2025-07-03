@@ -788,7 +788,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
+      console.log("Payment verification started for user:", userId);
+      console.log("Payment data:", { razorpay_order_id, razorpay_payment_id, razorpay_signature });
+
       if (!razorpay) {
+        console.error("Razorpay not configured");
         return res.status(503).json({ message: "Payment service not configured" });
       }
 
@@ -799,14 +803,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .update(razorpay_order_id + "|" + razorpay_payment_id)
         .digest('hex');
 
+      console.log("Signature verification:", { expected_signature, received_signature: razorpay_signature });
+
       if (expected_signature !== razorpay_signature) {
+        console.error("Invalid payment signature");
         return res.status(400).json({ message: "Invalid payment signature" });
       }
 
       // Verify payment with Razorpay
+      console.log("Fetching payment details from Razorpay...");
       const payment = await razorpay.payments.fetch(razorpay_payment_id);
+      console.log("Payment status:", payment.status, "Amount:", payment.amount);
+      
       if (payment.status !== 'captured') {
-        return res.status(400).json({ message: "Payment not captured" });
+        console.error("Payment not captured, status:", payment.status);
+        return res.status(400).json({ message: `Payment not captured. Status: ${payment.status}` });
       }
 
       // Add funds to user wallet
