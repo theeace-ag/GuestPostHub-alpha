@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
@@ -39,6 +39,34 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
   const [withdrawAmount, setWithdrawAmount] = useState("");
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const [isRazorpayLoaded, setIsRazorpayLoaded] = useState(false);
+
+  // Load Razorpay script
+  useEffect(() => {
+    const loadRazorpayScript = () => {
+      return new Promise((resolve) => {
+        const existingScript = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]');
+        
+        if (existingScript) {
+          setIsRazorpayLoaded(true);
+          resolve(true);
+          return;
+        }
+
+        const script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.async = true;
+        script.onload = () => {
+          setIsRazorpayLoaded(true);
+          resolve(true);
+        };
+        script.onerror = () => resolve(false);
+        document.body.appendChild(script);
+      });
+    };
+
+    loadRazorpayScript();
+  }, []);
 
   const { data: walletData } = useQuery({
     queryKey: ["/api/wallet/balance"],
@@ -58,6 +86,16 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
       return response.json();
     },
     onSuccess: (data) => {
+      // Check if Razorpay is loaded
+      if (!isRazorpayLoaded || typeof (window as any).Razorpay === 'undefined') {
+        toast({
+          title: "Payment Gateway Loading",
+          description: "Please wait for the payment gateway to load and try again.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       // Open Razorpay checkout
       const options = {
         key: data.key,
@@ -101,8 +139,16 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
         }
       };
 
-      const rzp = new (window as any).Razorpay(options);
-      rzp.open();
+      try {
+        const rzp = new (window as any).Razorpay(options);
+        rzp.open();
+      } catch (error) {
+        toast({
+          title: "Payment Gateway Error",
+          description: "Failed to initialize payment gateway. Please refresh and try again.",
+          variant: "destructive",
+        });
+      }
     },
     onError: (error: any) => {
       toast({
@@ -246,11 +292,12 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
                       <div className="flex gap-2">
                         <Button
                           onClick={handleAddFunds}
-                          disabled={addFundsMutation.isPending}
+                          disabled={addFundsMutation.isPending || !isRazorpayLoaded}
                           className="flex-1"
                         >
                           <CreditCard className="h-4 w-4 mr-2" />
-                          {addFundsMutation.isPending ? "Processing..." : "Add Funds"}
+                          {addFundsMutation.isPending ? "Processing..." : 
+                           !isRazorpayLoaded ? "Loading Payment Gateway..." : "Add Funds"}
                         </Button>
                         <Button
                           variant="outline"
