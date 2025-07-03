@@ -125,6 +125,14 @@ Changelog:
   - Created distinct role-based dashboards (buyer vs publisher)
   - Fixed navigation component nested link issues
   - Added sample categories for testing
+- July 03, 2025. Account type selection and admin features implemented
+  - Fixed website submission data type conversion issue (price field)
+  - Added account type selection modal during signup process
+  - Created dev team portal for website approvals (/dev-portal)
+  - Enhanced user schema with hasSelectedRole and roleChangeCount fields
+  - Implemented role change restrictions (only once from settings)
+  - Added comprehensive admin API endpoints for website approval workflow
+  - Created temporary admin user for testing system
 ```
 
 ## User Preferences

@@ -43,7 +43,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Role switching for testing
+  // Set user role during signup
+  app.post('/api/auth/set-role', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { role } = req.body;
+      
+      if (!['buyer', 'publisher'].includes(role)) {
+        return res.status(400).json({ message: "Invalid role" });
+      }
+
+      // Check if user already has selected their role
+      const existingUser = await storage.getUser(userId);
+      if (existingUser && existingUser.hasSelectedRole) {
+        return res.status(400).json({ message: "Role already selected" });
+      }
+
+      // Update user role and mark as having selected role
+      await storage.updateUser(userId, { 
+        role, 
+        hasSelectedRole: true,
+        roleChangeCount: 1 
+      });
+      const updatedUser = await storage.getUser(userId);
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Error setting role:", error);
+      res.status(500).json({ message: "Failed to set role" });
+    }
+  });
+
+  // Role switching for testing (admin only)
   app.post('/api/auth/switch-role', isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

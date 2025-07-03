@@ -53,6 +53,8 @@ export const users = pgTable("users", {
   lastName: varchar("last_name"),
   profileImageUrl: varchar("profile_image_url"),
   role: userRoleEnum("role").notNull().default("buyer"),
+  hasSelectedRole: boolean("has_selected_role").default(false),
+  roleChangeCount: integer("role_change_count").default(0),
   walletBalance: decimal("wallet_balance", { precision: 10, scale: 2 }).default("0.00"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

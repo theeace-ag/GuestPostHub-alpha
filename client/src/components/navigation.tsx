@@ -48,6 +48,7 @@ export function Navigation() {
       case 'admin':
         return [
           { href: '/admin', label: 'Dashboard', active: location === '/admin' },
+          { href: '/dev-portal', label: 'Dev Portal', active: location === '/dev-portal' },
           { href: '/orders', label: 'All Orders', active: location === '/orders' },
         ];
       default:
