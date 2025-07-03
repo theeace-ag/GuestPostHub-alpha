@@ -249,8 +249,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const platformFee = totalAmount * 0.05; // 5% platform fee
         
         subtotal += totalAmount + platformFee;
+      }
 
-        // Create order
+      // Check wallet balance
+      const user = await storage.getUser(userId);
+      const walletBalance = parseFloat(user?.walletBalance || "0");
+      
+      if (walletBalance < subtotal) {
+        return res.status(400).json({ 
+          message: "Insufficient wallet balance", 
+          required: subtotal.toFixed(2),
+          available: walletBalance.toFixed(2)
+        });
+      }
+
+      // Deduct total amount from buyer's wallet
+      const newWalletBalance = (walletBalance - subtotal).toString();
+      await storage.updateWalletBalance(userId, newWalletBalance);
+
+      // Process each cart item
+      for (const item of cartItems) {
+        const amount = parseFloat(item.website.pricePerPost);
+        const contentFee = needsContent ? 50 : 0;
+        const totalAmount = amount + contentFee;
+        const platformFee = totalAmount * 0.05; // 5% platform fee
+        
         const orderData = {
           buyerId: userId,
           publisherId: item.website.publisherId,
@@ -265,21 +288,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const order = await storage.createOrder(orderData);
         orders.push(order);
 
-        // Create transaction
+        // Create transaction for buyer
         await storage.createTransaction({
           userId,
           orderId: order.id,
           type: "debit",
           amount: (totalAmount + platformFee).toString(),
           description: `Payment for guest post on ${item.website.url}`,
-          paymentMethod,
+          paymentMethod: "wallet",
         });
 
         // Create notification for publisher
         await storage.createNotification({
           userId: item.website.publisherId,
           title: "New Order Received",
-          message: `You have received a new guest post order for ${item.website.url}`,
+          message: `You have received a new guest post order for ${item.website.url}. Amount pending: $${amount.toFixed(2)} (Platform fee: $${platformFee.toFixed(2)})`,
+          type: "order",
+        });
+
+        // Create notification for buyer  
+        await storage.createNotification({
+          userId: userId,
+          title: "Order Confirmed",
+          message: `Your order for ${item.website.url} has been confirmed. Publisher will complete it within 7 days.`,
           type: "order",
         });
       }
@@ -290,11 +321,249 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ 
         message: "Orders created successfully", 
         orders,
-        total: subtotal.toFixed(2)
+        total: subtotal.toFixed(2),
+        newWalletBalance
       });
     } catch (error) {
       console.error("Error processing checkout:", error);
       res.status(500).json({ message: "Failed to process checkout" });
+    }
+  });
+
+  // Publisher submits proof of work
+  app.patch('/api/orders/:id/submit-proof', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const id = parseInt(req.params.id);
+      const { postUrl, proofOfWork, proofImages } = req.body;
+
+      // Get order to verify ownership
+      const order = await storage.getOrderById(id);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (user?.role !== "publisher" || order.publisherId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      if (order.status !== "pending" && order.status !== "in_progress") {
+        return res.status(400).json({ message: "Order cannot be updated at this stage" });
+      }
+
+      const updatedOrder = await storage.updateOrder(id, {
+        status: "submitted",
+        postUrl,
+        proofOfWork,
+        proofImages: JSON.stringify(proofImages || []),
+      });
+
+      // Notify buyer about proof submission
+      await storage.createNotification({
+        userId: order.buyerId,
+        title: "Proof of Work Submitted",
+        message: `Publisher has submitted proof of work for your order on ${order.website.url}. Awaiting admin approval.`,
+        type: "order",
+      });
+
+      // Notify admin about proof submission
+      const adminUsers = await storage.getAdminUsers();
+      for (const admin of adminUsers) {
+        await storage.createNotification({
+          userId: admin.id,
+          title: "Proof of Work Needs Review",
+          message: `Order #${order.orderNumber} has proof of work submitted and needs admin approval.`,
+          type: "admin",
+        });
+      }
+
+      res.json(updatedOrder);
+    } catch (error) {
+      console.error("Error submitting proof of work:", error);
+      res.status(500).json({ message: "Failed to submit proof of work" });
+    }
+  });
+
+  // Admin approves or rejects proof of work
+  app.patch('/api/admin/orders/:id/approve', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const id = parseInt(req.params.id);
+      const { approved, rejectionReason } = req.body;
+
+      const user = await storage.getUser(userId);
+      if (user?.role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const order = await storage.getOrderById(id);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      if (order.status !== "submitted") {
+        return res.status(400).json({ message: "Order is not in submitted state" });
+      }
+
+      if (approved) {
+        // Approve order and pay publisher
+        const publisherAmount = parseFloat(order.amount);
+        
+        await storage.updateOrder(id, {
+          status: "completed",
+        });
+
+        // Credit publisher's wallet
+        await storage.updateWalletBalance(order.publisherId, publisherAmount.toString());
+
+        // Create transaction for publisher
+        await storage.createTransaction({
+          userId: order.publisherId,
+          orderId: id,
+          type: "credit",
+          amount: publisherAmount.toString(),
+          description: `Payment for completed order #${order.orderNumber}`,
+        });
+
+        // Notify publisher about payment
+        await storage.createNotification({
+          userId: order.publisherId,
+          title: "Payment Received",
+          message: `You've received $${publisherAmount.toFixed(2)} for order #${order.orderNumber}. Payment has been added to your wallet.`,
+          type: "payment",
+        });
+
+        // Notify buyer about completion
+        await storage.createNotification({
+          userId: order.buyerId,
+          title: "Order Completed",
+          message: `Your order #${order.orderNumber} has been completed successfully. Check your post at ${order.postUrl}`,
+          type: "order",
+        });
+
+      } else {
+        // Reject order and refund buyer
+        await storage.updateOrder(id, {
+          status: "refunded",
+          rejectionReason,
+        });
+
+        // Refund buyer
+        const refundAmount = parseFloat(order.totalAmount);
+        await storage.updateWalletBalance(order.buyerId, refundAmount.toString());
+
+        // Create refund transaction
+        await storage.createTransaction({
+          userId: order.buyerId,
+          orderId: id,
+          type: "credit",
+          amount: refundAmount.toString(),
+          description: `Refund for rejected order #${order.orderNumber}`,
+        });
+
+        // Notify buyer about refund
+        await storage.createNotification({
+          userId: order.buyerId,
+          title: "Order Refunded",
+          message: `Your order #${order.orderNumber} has been refunded. Amount: $${refundAmount.toFixed(2)}`,
+          type: "refund",
+        });
+
+        // Notify publisher about rejection
+        await storage.createNotification({
+          userId: order.publisherId,
+          title: "Order Rejected",
+          message: `Your proof of work for order #${order.orderNumber} was rejected. Reason: ${rejectionReason}`,
+          type: "order",
+        });
+      }
+
+      const updatedOrder = await storage.getOrderById(id);
+      res.json(updatedOrder);
+    } catch (error) {
+      console.error("Error processing order approval:", error);
+      res.status(500).json({ message: "Failed to process order approval" });
+    }
+  });
+
+  // Get orders pending admin approval
+  app.get('/api/admin/orders/pending', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const orders = await storage.getOrders({ status: "submitted" });
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching pending orders:", error);
+      res.status(500).json({ message: "Failed to fetch pending orders" });
+    }
+  });
+
+  // Auto-refund endpoint (to be called by cron job)
+  app.post('/api/admin/process-auto-refunds', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const overdueOrders = await storage.getOverdueOrders();
+      const processedOrders = [];
+
+      for (const order of overdueOrders) {
+        // Auto-refund the order
+        await storage.updateOrder(order.id, {
+          status: "refunded",
+          rejectionReason: "Auto-refunded due to 7-day deadline exceeded",
+        });
+
+        // Refund buyer
+        const refundAmount = parseFloat(order.totalAmount);
+        await storage.updateWalletBalance(order.buyerId, refundAmount.toString());
+
+        // Create refund transaction
+        await storage.createTransaction({
+          userId: order.buyerId,
+          orderId: order.id,
+          type: "credit",
+          amount: refundAmount.toString(),
+          description: `Auto-refund for order #${order.orderNumber} (7-day deadline exceeded)`,
+        });
+
+        // Notify buyer about auto-refund
+        await storage.createNotification({
+          userId: order.buyerId,
+          title: "Auto-Refund Processed",
+          message: `Your order #${order.orderNumber} has been automatically refunded due to the 7-day deadline being exceeded. Amount: $${refundAmount.toFixed(2)}`,
+          type: "refund",
+        });
+
+        // Notify publisher about auto-refund
+        await storage.createNotification({
+          userId: order.publisherId,
+          title: "Order Auto-Refunded",
+          message: `Order #${order.orderNumber} has been automatically refunded due to the 7-day deadline being exceeded.`,
+          type: "order",
+        });
+
+        processedOrders.push(order);
+      }
+
+      res.json({ 
+        message: `Processed ${processedOrders.length} auto-refunds`,
+        processedOrders: processedOrders.length
+      });
+    } catch (error) {
+      console.error("Error processing auto-refunds:", error);
+      res.status(500).json({ message: "Failed to process auto-refunds" });
     }
   });
 
@@ -461,6 +730,122 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching all orders:", error);
       res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  // Wallet and Payment routes
+  app.get('/api/wallet/balance', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      res.json({ balance: user?.walletBalance || "0.00" });
+    } catch (error) {
+      console.error("Error fetching wallet balance:", error);
+      res.status(500).json({ message: "Failed to fetch wallet balance" });
+    }
+  });
+
+  app.post('/api/wallet/add-funds', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { amount, paymentMethod } = req.body;
+
+      if (!amount || parseFloat(amount) <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+
+      // Add funds to wallet
+      const currentUser = await storage.getUser(userId);
+      const currentBalance = parseFloat(currentUser?.walletBalance || "0");
+      const newBalance = (currentBalance + parseFloat(amount)).toString();
+      
+      await storage.updateWalletBalance(userId, newBalance);
+      
+      // Create transaction record
+      await storage.createTransaction({
+        userId,
+        type: "credit",
+        amount: amount.toString(),
+        description: "Wallet funds added",
+        paymentMethod: paymentMethod || "card",
+      });
+
+      // Create notification
+      await storage.createNotification({
+        userId,
+        title: "Funds Added",
+        message: `$${parseFloat(amount).toFixed(2)} has been added to your wallet.`,
+        type: "payment",
+      });
+
+      res.json({ 
+        success: true, 
+        newBalance,
+        message: "Funds added successfully"
+      });
+    } catch (error) {
+      console.error("Error adding funds:", error);
+      res.status(500).json({ message: "Failed to add funds" });
+    }
+  });
+
+  app.post('/api/wallet/withdraw', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { amount, bankDetails } = req.body;
+
+      if (!amount || parseFloat(amount) <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+
+      const user = await storage.getUser(userId);
+      const currentBalance = parseFloat(user?.walletBalance || "0");
+      const withdrawAmount = parseFloat(amount);
+
+      if (withdrawAmount > currentBalance) {
+        return res.status(400).json({ message: "Insufficient balance" });
+      }
+
+      // Deduct from wallet
+      const newBalance = (currentBalance - withdrawAmount).toString();
+      await storage.updateWalletBalance(userId, newBalance);
+
+      // Create transaction record
+      await storage.createTransaction({
+        userId,
+        type: "debit",
+        amount: amount.toString(),
+        description: `Withdrawal to ${bankDetails?.accountNumber || 'bank account'}`,
+        paymentMethod: "bank_transfer",
+      });
+
+      // Create notification
+      await storage.createNotification({
+        userId,
+        title: "Withdrawal Processed",
+        message: `$${withdrawAmount.toFixed(2)} withdrawal has been processed and will be credited to your bank account within 2-3 business days.`,
+        type: "payment",
+      });
+
+      res.json({ 
+        success: true, 
+        newBalance,
+        message: "Withdrawal processed successfully"
+      });
+    } catch (error) {
+      console.error("Error processing withdrawal:", error);
+      res.status(500).json({ message: "Failed to process withdrawal" });
+    }
+  });
+
+  app.get('/api/wallet/transactions', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const transactions = await storage.getTransactions(userId);
+      res.json(transactions);
+    } catch (error) {
+      console.error("Error fetching transactions:", error);
+      res.status(500).json({ message: "Failed to fetch transactions" });
     }
   });
 

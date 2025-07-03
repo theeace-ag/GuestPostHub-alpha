@@ -12,6 +12,7 @@ import { Bell, ShoppingCart, Wallet, ChevronDown, Users } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Link, useLocation } from "wouter";
 import { RoleSwitcher } from "@/components/role-switcher";
+import { WalletManager } from "@/components/wallet-manager";
 
 export function Navigation() {
   const { user, isAuthenticated, isLoading } = useAuth();
@@ -90,11 +91,11 @@ export function Navigation() {
           <div className="flex items-center space-x-4">
             {isAuthenticated ? (
               <>
-                {/* Wallet Balance */}
-                <div className="hidden md:flex items-center space-x-2 text-gray-700 hover:text-primary">
-                  <Wallet className="h-4 w-4" />
-                  <span className="text-sm font-medium">${user?.walletBalance || '0.00'}</span>
-                </div>
+                {/* Wallet Manager */}
+                <WalletManager 
+                  triggerText={`$${user?.walletBalance || '0.00'}`}
+                  triggerVariant="ghost"
+                />
 
                 {/* Shopping Cart (Buyers only) */}
                 {user?.role === 'buyer' && (

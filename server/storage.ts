@@ -87,6 +87,8 @@ export interface IStorage {
     pendingApprovals: number;
     totalOrders: number;
   }>;
+  getAdminUsers(): Promise<User[]>;
+  getOverdueOrders(): Promise<Order[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -351,9 +353,13 @@ export class DatabaseStorage implements IStorage {
     // Generate unique order number
     const orderNumber = `LP-${new Date().getFullYear()}-${Date.now().toString().slice(-6)}`;
     
+    // Set auto-refund deadline to 7 days from now
+    const autoRefundAt = new Date();
+    autoRefundAt.setDate(autoRefundAt.getDate() + 7);
+    
     const [created] = await db
       .insert(orders)
-      .values({ ...order, orderNumber })
+      .values({ ...order, orderNumber, autoRefundAt })
       .returning();
     return created;
   }
@@ -468,6 +474,26 @@ export class DatabaseStorage implements IStorage {
       pendingApprovals: pendingResult?.count || 0,
       totalOrders: ordersResult?.count || 0,
     };
+  }
+
+  async getAdminUsers(): Promise<User[]> {
+    return await db
+      .select()
+      .from(users)
+      .where(eq(users.role, "admin"));
+  }
+
+  async getOverdueOrders(): Promise<Order[]> {
+    const now = new Date();
+    return await db
+      .select()
+      .from(orders)
+      .where(
+        and(
+          eq(orders.status, "pending"),
+          lte(orders.autoRefundAt, now)
+        )
+      );
   }
 }
 

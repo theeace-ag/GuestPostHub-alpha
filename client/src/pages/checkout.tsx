@@ -1,12 +1,14 @@
 import { useState, useEffect } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import { CheckCircle, CreditCard, Wallet } from "lucide-react";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { CheckCircle, CreditCard, Wallet, AlertCircle, Plus } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/useAuth";
+import { WalletManager } from "@/components/wallet-manager";
 
 declare global {
   interface Window {
@@ -18,10 +20,17 @@ export default function Checkout() {
   const { toast } = useToast();
   const { user, isAuthenticated } = useAuth();
   const [paymentLoading, setPaymentLoading] = useState(false);
+  const queryClient = useQueryClient();
 
   // Get cart items
   const { data: cartItems = [], isLoading: cartLoading } = useQuery({
     queryKey: ["/api/cart"],
+    enabled: isAuthenticated,
+  });
+
+  // Get wallet balance
+  const { data: walletData } = useQuery({
+    queryKey: ["/api/wallet/balance"],
     enabled: isAuthenticated,
   });
 
@@ -31,22 +40,15 @@ export default function Checkout() {
   }, 0);
   const platformFee = subtotal * 0.05;
   const totalAmount = subtotal + platformFee;
+  const walletBalance = parseFloat(walletData?.balance || "0");
+  const hasInsufficientFunds = walletBalance < totalAmount;
 
   const paymentMutation = useMutation({
-    mutationFn: async (method: 'razorpay' | 'wallet') => {
-      if (method === 'razorpay') {
-        // Create Razorpay order
-        const orderResponse = await apiRequest("POST", "/api/payment/create-order", {
-          amount: totalAmount,
-          currency: 'INR'
-        });
-        return orderResponse.json();
-      } else {
-        // Process wallet payment
-        return await apiRequest("POST", "/api/checkout", {
-          paymentMethod: 'wallet'
-        });
-      }
+    mutationFn: async () => {
+      return await apiRequest("POST", "/api/orders/checkout", {
+        paymentMethod: 'wallet',
+        needsContent: false
+      });
     },
     onSuccess: (data, method) => {
       if (method === 'razorpay') {
@@ -113,9 +115,9 @@ export default function Checkout() {
     }
   });
 
-  const handlePayment = (method: 'razorpay' | 'wallet') => {
+  const handleWalletPayment = () => {
     setPaymentLoading(true);
-    paymentMutation.mutate(method);
+    paymentMutation.mutate();
   };
 
   // Load Razorpay script
@@ -209,37 +211,35 @@ export default function Checkout() {
                 <CardTitle>Payment Method</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Razorpay Payment */}
-                <Button
-                  className="w-full h-16 text-left justify-start"
-                  variant="outline"
-                  onClick={() => handlePayment('razorpay')}
-                  disabled={paymentLoading}
-                >
-                  <CreditCard className="mr-3 h-5 w-5" />
-                  <div>
-                    <div className="font-medium">Pay with Razorpay</div>
-                    <div className="text-sm text-gray-600">Credit/Debit Card, UPI, Net Banking</div>
+                {/* Wallet Balance Card */}
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-gray-700">Wallet Balance</span>
+                    <span className="text-lg font-bold">${walletBalance.toFixed(2)}</span>
                   </div>
-                </Button>
+                  {hasInsufficientFunds && (
+                    <Alert className="mt-3">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        You need ${(totalAmount - walletBalance).toFixed(2)} more to complete this purchase.
+                        <div className="mt-2">
+                          <WalletManager triggerText="Add Funds" triggerVariant="default" />
+                        </div>
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </div>
 
-                {/* Wallet Payment */}
+                {/* Wallet Payment Button */}
                 <Button
-                  className="w-full h-16 text-left justify-start"
-                  variant="outline"
-                  onClick={() => handlePayment('wallet')}
-                  disabled={paymentLoading || parseFloat(user?.walletBalance || '0') < totalAmount}
+                  className="w-full h-16"
+                  onClick={handleWalletPayment}
+                  disabled={paymentLoading || hasInsufficientFunds || cartItems.length === 0}
                 >
                   <Wallet className="mr-3 h-5 w-5" />
-                  <div className="flex-1">
-                    <div className="font-medium">Pay with Wallet</div>
-                    <div className="text-sm text-gray-600">
-                      Balance: ${user?.walletBalance || '0.00'}
-                    </div>
+                  <div>
+                    {paymentLoading ? "Processing..." : `Pay $${totalAmount.toFixed(2)} with Wallet`}
                   </div>
-                  {parseFloat(user?.walletBalance || '0') < totalAmount && (
-                    <span className="text-sm text-red-600">Insufficient balance</span>
-                  )}
                 </Button>
 
                 <div className="pt-4">

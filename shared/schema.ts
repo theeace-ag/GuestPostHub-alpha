@@ -33,9 +33,11 @@ export const userRoleEnum = pgEnum("user_role", ["buyer", "publisher", "admin"])
 export const orderStatusEnum = pgEnum("order_status", [
   "pending",
   "in_progress", 
+  "submitted", // Publisher has submitted proof of work
   "completed",
   "disputed",
-  "cancelled"
+  "cancelled",
+  "refunded"
 ]);
 
 // Website approval status enum
@@ -115,6 +117,10 @@ export const orders = pgTable("orders", {
   postUrl: varchar("post_url", { length: 500 }),
   requirements: text("requirements"),
   publisherNotes: text("publisher_notes"),
+  proofOfWork: text("proof_of_work"), // Publisher's proof submission
+  proofImages: text("proof_images"), // JSON array of proof image URLs
+  rejectionReason: text("rejection_reason"), // Admin rejection reason
+  autoRefundAt: timestamp("auto_refund_at"), // Auto-refund deadline (7 days)
   razorpayOrderId: varchar("razorpay_order_id", { length: 100 }),
   razorpayPaymentId: varchar("razorpay_payment_id", { length: 100 }),
   createdAt: timestamp("created_at").defaultNow(),
