@@ -148,12 +148,34 @@
 }
 
 /* Razorpay modal z-index fix */
-.razorpay-container {
+.razorpay-container,
+.razorpay-modal,
+#razorpay-container,
+.razorpay-backdrop,
+.razorpay-overlay {
+  z-index: 99999 !important;
+  position: fixed !important;
+}
+
+/* Ensure Razorpay elements are clickable */
+.razorpay-container *,
+.razorpay-modal *,
+#razorpay-container * {
+  pointer-events: auto !important;
   z-index: 99999 !important;
 }
 
-.razorpay-backdrop {
-  z-index: 99998 !important;
+/* Hide any conflicting overlays when Razorpay is open */
+body.razorpay-blur {
+  overflow: hidden;
+}
+
+body.razorpay-blur > * {
+  pointer-events: none;
+}
+
+body.razorpay-blur .razorpay-container {
+  pointer-events: auto !important;
 }
 
 .order-status-disputed {

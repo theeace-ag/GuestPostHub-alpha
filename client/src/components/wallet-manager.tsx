@@ -148,7 +148,10 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
               description: "Payment was cancelled by user",
               variant: "destructive",
             });
-          }
+          },
+          escape: true,
+          backdropclose: false,
+          animation: true
         }
       };
 
@@ -157,6 +160,23 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
         setIsAddOpen(false);
         
         const rzp = new (window as any).Razorpay(options);
+        
+        // Add event listeners to handle modal state
+        rzp.on('payment.success', function() {
+          document.body.classList.remove('razorpay-blur');
+        });
+        
+        rzp.on('payment.cancel', function() {
+          document.body.classList.remove('razorpay-blur');
+        });
+        
+        rzp.on('payment.error', function() {
+          document.body.classList.remove('razorpay-blur');
+        });
+        
+        // Add blur class when opening
+        document.body.classList.add('razorpay-blur');
+        
         rzp.open();
       } catch (error) {
         toast({
