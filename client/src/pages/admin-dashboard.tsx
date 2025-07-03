@@ -311,7 +311,7 @@ export default function AdminDashboard() {
                                     </p>
                                   </div>
                                 </TableCell>
-                                <TableCell className="font-medium">${website.pricePerPost}</TableCell>
+                                <TableCell className="font-medium">₹{website.pricePerPost}</TableCell>
                                 <TableCell className="text-gray-600">
                                   {new Date(website.createdAt).toLocaleDateString()}
                                 </TableCell>

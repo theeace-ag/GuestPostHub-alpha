@@ -302,7 +302,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.createNotification({
           userId: item.website.publisherId,
           title: "New Order Received",
-          message: `You have received a new guest post order for ${item.website.url}. Amount pending: $${amount.toFixed(2)} (Platform fee: $${platformFee.toFixed(2)})`,
+          message: `You have received a new guest post order for ${item.website.url}. Amount pending: ₹${amount.toFixed(2)} (Platform fee: ₹${platformFee.toFixed(2)})`,
           type: "order",
         });
 
@@ -542,7 +542,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.createNotification({
           userId: order.buyerId,
           title: "Auto-Refund Processed",
-          message: `Your order #${order.orderNumber} has been automatically refunded due to the 7-day deadline being exceeded. Amount: $${refundAmount.toFixed(2)}`,
+          message: `Your order #${order.orderNumber} has been automatically refunded due to the 7-day deadline being exceeded. Amount: ₹${refundAmount.toFixed(2)}`,
           type: "refund",
         });
 

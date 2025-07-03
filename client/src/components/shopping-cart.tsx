@@ -111,7 +111,7 @@ export function ShoppingCartSheet() {
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="yes" id="yes-content" />
-                    <Label htmlFor="yes-content" className="text-sm">Content writing required (+$50/post)</Label>
+                    <Label htmlFor="yes-content" className="text-sm">Content writing required (+₹50/post)</Label>
                   </div>
                 </RadioGroup>
               </div>

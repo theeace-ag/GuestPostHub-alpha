@@ -110,7 +110,7 @@ export function WebsiteCard({ website }: WebsiteCardProps) {
             </Badge>
           </div>
           <div className="text-right">
-            <div className="text-2xl font-bold text-gray-900">${website.pricePerPost}</div>
+            <div className="text-2xl font-bold text-gray-900">₹{website.pricePerPost}</div>
             <div className="text-xs text-gray-500">per post</div>
           </div>
         </div>

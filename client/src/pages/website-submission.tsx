@@ -27,7 +27,7 @@ const websiteSubmissionSchema = z.object({
   language: z.string().min(1, "Please select a language"),
   linkType: z.string().min(1, "Please select a link type"),
   postDuration: z.string().min(1, "Please select post duration"),
-  pricePerPost: z.coerce.number().min(1, "Price must be at least $1"),
+  pricePerPost: z.coerce.number().min(1, "Price must be at least ₹1"),
   description: z.string().min(50, "Description must be at least 50 characters"),
 });
 
