@@ -140,6 +140,13 @@ Changelog:
   - Enhanced security with proper payment verification and encrypted storage
   - Fixed publisher dashboard to show incoming orders properly
   - Implemented proper user-specific data filtering across all endpoints
+- July 03, 2025. Migration to Replit environment and payment system fixes
+  - Successfully migrated project from Replit Agent to Replit environment
+  - Fixed PostgreSQL database configuration and sessions table setup
+  - Configured Razorpay API keys for real payment processing
+  - Added minimum amount validation (₹1) for Razorpay payment orders
+  - Fixed authentication flow and session management issues
+  - Updated currency display from USD to INR throughout the application
 ```
 
 ## User Preferences

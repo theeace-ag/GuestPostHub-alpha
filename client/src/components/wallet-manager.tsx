@@ -148,6 +148,16 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
       });
       return;
     }
+
+    if (parseFloat(addAmount) < 1) {
+      toast({
+        title: "Amount Too Low",
+        description: "Minimum amount is ₹1",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     addFundsMutation.mutate(addAmount);
   };
 
@@ -200,7 +210,7 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
               <CardTitle className="flex items-center justify-between">
                 <span>Current Balance</span>
                 <Badge variant="outline" className="text-lg px-3 py-1">
-                  ${parseFloat(walletData?.balance || "0").toFixed(2)}
+                  ₹{parseFloat(walletData?.balance || "0").toFixed(2)}
                 </Badge>
               </CardTitle>
             </CardHeader>
@@ -219,16 +229,19 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
                     </DialogHeader>
                     <div className="space-y-4">
                       <div>
-                        <Label htmlFor="add-amount">Amount ($)</Label>
+                        <Label htmlFor="add-amount">Amount (₹)</Label>
                         <Input
                           id="add-amount"
                           type="number"
-                          placeholder="Enter amount"
+                          placeholder="Minimum ₹1"
                           value={addAmount}
                           onChange={(e) => setAddAmount(e.target.value)}
                           min="1"
-                          step="0.01"
+                          step="1"
                         />
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Minimum amount is ₹1
+                        </p>
                       </div>
                       <div className="flex gap-2">
                         <Button

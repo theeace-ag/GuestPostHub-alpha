@@ -755,6 +755,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Invalid amount" });
       }
 
+      // Razorpay minimum amount is ₹1 (100 paise)
+      if (parseFloat(amount) < 1) {
+        return res.status(400).json({ message: "Minimum amount is ₹1" });
+      }
+
       if (!razorpay) {
         return res.status(503).json({ message: "Payment service not configured" });
       }
@@ -805,7 +810,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Add funds to user wallet
-      const actualAmount = (payment.amount / 100).toFixed(2); // Convert from paise
+      const actualAmount = (Number(payment.amount) / 100).toFixed(2); // Convert from paise
       const currentUser = await storage.getUser(userId);
       const currentBalance = parseFloat(currentUser?.walletBalance || "0");
       const newBalance = (currentBalance + parseFloat(actualAmount)).toFixed(2);
