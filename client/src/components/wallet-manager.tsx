@@ -132,6 +132,10 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
               description: error.message || "Please contact support",
               variant: "destructive",
             });
+          } finally {
+            // Clean up modal state to restore mouse functionality
+            document.body.classList.remove('razorpay-blur');
+            document.body.style.pointerEvents = 'auto';
           }
         },
         prefill: {
@@ -143,6 +147,9 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
         },
         modal: {
           ondismiss: function(){
+            // Clean up modal state when dismissed
+            document.body.classList.remove('razorpay-blur');
+            document.body.style.pointerEvents = 'auto';
             toast({
               title: "Payment Cancelled",
               description: "Payment was cancelled by user",

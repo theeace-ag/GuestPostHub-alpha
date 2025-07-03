@@ -93,7 +93,7 @@ export function Navigation() {
               <>
                 {/* Wallet Manager */}
                 <WalletManager 
-                  triggerText={`$${user?.walletBalance || '0.00'}`}
+                  triggerText={`₹${user?.walletBalance || '0.00'}`}
                   triggerVariant="ghost"
                 />
 
