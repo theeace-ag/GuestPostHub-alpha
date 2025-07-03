@@ -797,9 +797,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Verify payment signature
-      const crypto = require('crypto');
-      const expected_signature = crypto
-        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      const crypto = await import('crypto');
+      const expected_signature = crypto.default
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
         .update(razorpay_order_id + "|" + razorpay_payment_id)
         .digest('hex');
 
@@ -959,9 +959,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = req.body;
 
-      const crypto = require('crypto');
-      const expected_signature = crypto
-        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET)
+      const crypto = await import('crypto');
+      const expected_signature = crypto.default
+        .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET!)
         .update(razorpay_order_id + '|' + razorpay_payment_id)
         .digest('hex');
 
