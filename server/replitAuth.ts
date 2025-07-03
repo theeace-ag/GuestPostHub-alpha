@@ -34,7 +34,7 @@ export function getSession() {
   });
   
   // Generate a session secret if not provided (for development)
-  const sessionSecret = process.env.SESSION_SECRET || crypto.randomBytes(64).toString('hex');
+  const sessionSecret = process.env.SESSION_SECRET || 'dev-session-secret-' + crypto.randomBytes(32).toString('hex');
   
   return session({
     secret: sessionSecret,
@@ -66,13 +66,13 @@ async function upsertUser(
   const existingUser = await storage.getUser(claims["sub"]);
   
   // If user doesn't exist, assign a default role (buyer) or use stored role preference
-  let role = 'buyer'; // default role
+  let role: "buyer" | "publisher" | "admin" = 'buyer'; // default role
   if (!existingUser) {
     // You could implement role selection logic here
     // For now, all new users default to buyer
     role = 'buyer';
   } else {
-    role = existingUser.role;
+    role = existingUser.role || 'buyer';
   }
 
   await storage.upsertUser({
