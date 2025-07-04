@@ -772,6 +772,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Admin approve/reject order
   app.patch('/api/admin/orders/:orderId/approve', isAuthenticated, async (req: any, res) => {
+    console.log(`[APPROVAL] Request received for order ${req.params.orderId}`);
     try {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
@@ -788,21 +789,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log(`Approval request - OrderID: ${orderId}, Approved: ${approved}, Body:`, req.body);
 
       console.log(`Fetching order with ID: ${orderId}`);
-      const order = await storage.getOrderById(orderId);
-      console.log(`Order result:`, order);
       
-      if (!order) {
+      // Directly query the order to avoid complex join issues
+      const [orderResult] = await db
+        .select()
+        .from(ordersTable)
+        .where(eq(ordersTable.id, orderId));
+      
+      console.log(`Direct order query result:`, orderResult);
+      
+      if (!orderResult) {
         console.log(`Order ${orderId} not found`);
         return res.status(404).json({ message: "Order not found" });
       }
 
-      console.log(`Order ${orderId} full object:`, JSON.stringify(order, null, 2));
-      console.log(`Order ${orderId} status: "${order.status}" (type: ${typeof order.status})`);
-      console.log(`Status check: submitted="${order.status === "submitted"}", pending_approval="${order.status === "pending_approval"}"`);
+      console.log(`Order ${orderId} full object:`, JSON.stringify(orderResult, null, 2));
+      console.log(`Order ${orderId} status: "${orderResult.status}" (type: ${typeof orderResult.status})`);
+      console.log(`Status check: submitted="${orderResult.status === "submitted"}", pending_approval="${orderResult.status === "pending_approval"}"`);
 
-      if (order.status !== "submitted" && order.status !== "pending_approval") {
-        console.log(`Status validation failed for order ${orderId}. Status: "${order.status}"`);
-        return res.status(400).json({ message: `Order is not pending approval. Current status: ${order.status}` });
+      if (orderResult.status !== "submitted" && orderResult.status !== "pending_approval") {
+        console.log(`Status validation failed for order ${orderId}. Status: "${orderResult.status}"`);
+        return res.status(400).json({ message: `Order is not pending approval. Current status: ${orderResult.status}` });
       }
       
       console.log(`Order ${orderId} status validation passed`);
@@ -815,9 +822,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Create notification for publisher
         await storage.createNotification({
-          userId: order.publisherId,
+          userId: orderResult.publisherId,
           title: "Order Approved",
-          message: `Your order #${order.orderNumber} has been approved! Payment is now pending and will be processed by the dev team.`,
+          message: `Your order #${orderResult.orderNumber} has been approved! Payment is now pending and will be processed by the dev team.`,
           type: "order_approved",
           orderId: orderId,
         });
@@ -828,7 +835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.createNotification({
             userId: admin.id,
             title: "Payment Pending",
-            message: `Order #${order.orderNumber} approved - payment to publisher pending confirmation.`,
+            message: `Order #${orderResult.orderNumber} approved - payment to publisher pending confirmation.`,
             type: "payment_pending",
             orderId: orderId,
           });
@@ -837,8 +844,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         res.json({ message: "Order approved - payment pending", order: updatedOrder });
       } else {
         // Reject order - refund buyer
-        const refundAmount = parseFloat(order.totalAmount);
-        await storage.updateWalletBalance(order.buyerId, refundAmount.toString());
+        const refundAmount = parseFloat(orderResult.totalAmount);
+        await storage.updateWalletBalance(orderResult.buyerId, refundAmount.toString());
         
         // Update order status to refunded
         const updatedOrder = await storage.updateOrder(orderId, {
@@ -849,26 +856,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Create transaction record for buyer
         await storage.createTransaction({
-          userId: order.buyerId,
+          userId: orderResult.buyerId,
           amount: refundAmount.toString(),
           type: "credit",
-          description: `Refund for rejected order #${order.orderNumber}`,
+          description: `Refund for rejected order #${orderResult.orderNumber}`,
           orderId: orderId,
         });
 
         // Create notifications
         await storage.createNotification({
-          userId: order.buyerId,
+          userId: orderResult.buyerId,
           title: "Order Refunded",
-          message: `Your order #${order.orderNumber} has been rejected and refunded. Reason: ${rejectionReason}`,
+          message: `Your order #${orderResult.orderNumber} has been rejected and refunded. Reason: ${rejectionReason}`,
           type: "refund",
           orderId: orderId,
         });
 
         await storage.createNotification({
-          userId: order.publisherId,
+          userId: orderResult.publisherId,
           title: "Order Rejected",
-          message: `Order #${order.orderNumber} has been rejected by admin. Reason: ${rejectionReason}`,
+          message: `Order #${orderResult.orderNumber} has been rejected by admin. Reason: ${rejectionReason}`,
           type: "order_rejected",
           orderId: orderId,
         });
