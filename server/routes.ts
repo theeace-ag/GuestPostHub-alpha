@@ -788,7 +788,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`Approval request - OrderID: ${orderId}, Approved: ${approved}, Body:`, req.body);
 
-      console.log(`Fetching order with ID: ${orderId}`);
+      console.error(`=== ORDER APPROVAL DEBUG START ===`);
+      console.error(`Fetching order with ID: ${orderId}`);
       
       // Directly query the order to avoid complex join issues
       const [orderResult] = await db
@@ -796,23 +797,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from(ordersTable)
         .where(eq(ordersTable.id, orderId));
       
-      console.log(`Direct order query result:`, orderResult);
+      console.error(`Direct order query result:`, JSON.stringify(orderResult, null, 2));
       
       if (!orderResult) {
-        console.log(`Order ${orderId} not found`);
+        console.error(`Order ${orderId} not found`);
         return res.status(404).json({ message: "Order not found" });
       }
 
-      console.log(`Order ${orderId} full object:`, JSON.stringify(orderResult, null, 2));
-      console.log(`Order ${orderId} status: "${orderResult.status}" (type: ${typeof orderResult.status})`);
-      console.log(`Status check: submitted="${orderResult.status === "submitted"}", pending_approval="${orderResult.status === "pending_approval"}"`);
+      console.error(`Order ${orderId} status: "${orderResult.status}" (type: ${typeof orderResult.status})`);
+      console.error(`Status check: submitted="${orderResult.status === "submitted"}", pending_approval="${orderResult.status === "pending_approval"}"`);
 
       if (orderResult.status !== "submitted" && orderResult.status !== "pending_approval") {
-        console.log(`Status validation failed for order ${orderId}. Status: "${orderResult.status}"`);
+        console.error(`Status validation failed for order ${orderId}. Status: "${orderResult.status}"`);
         return res.status(400).json({ message: `Order is not pending approval. Current status: ${orderResult.status}` });
       }
       
-      console.log(`Order ${orderId} status validation passed`);
+      console.error(`Order ${orderId} status validation passed`);
 
       if (approved) {
         // Approve order - set to payment pending
