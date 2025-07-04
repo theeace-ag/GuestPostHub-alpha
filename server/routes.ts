@@ -776,24 +776,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user.claims.sub;
       const user = await storage.getUser(userId);
       
+      console.log(`Admin approval request by user:`, user?.id, user?.role);
+      
       if (user?.role !== "admin") {
         return res.status(403).json({ message: "Admin access required" });
       }
 
       const orderId = parseInt(req.params.orderId);
       const { approved, rejectionReason } = req.body;
+      
+      console.log(`Approval request - OrderID: ${orderId}, Approved: ${approved}, Body:`, req.body);
 
+      console.log(`Fetching order with ID: ${orderId}`);
       const order = await storage.getOrderById(orderId);
+      console.log(`Order result:`, order);
+      
       if (!order) {
+        console.log(`Order ${orderId} not found`);
         return res.status(404).json({ message: "Order not found" });
       }
 
+      console.log(`Order ${orderId} full object:`, JSON.stringify(order, null, 2));
       console.log(`Order ${orderId} status: "${order.status}" (type: ${typeof order.status})`);
       console.log(`Status check: submitted="${order.status === "submitted"}", pending_approval="${order.status === "pending_approval"}"`);
 
       if (order.status !== "submitted" && order.status !== "pending_approval") {
+        console.log(`Status validation failed for order ${orderId}. Status: "${order.status}"`);
         return res.status(400).json({ message: `Order is not pending approval. Current status: ${order.status}` });
       }
+      
+      console.log(`Order ${orderId} status validation passed`);
 
       if (approved) {
         // Approve order - set to payment pending
