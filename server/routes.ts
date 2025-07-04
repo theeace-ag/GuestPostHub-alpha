@@ -788,6 +788,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`Approval request - OrderID: ${orderId}, Approved: ${approved}, Body:`, req.body);
 
+      // TEST: Quick return to verify route is hit
+      return res.status(200).json({ 
+        message: "Route test", 
+        orderId: orderId, 
+        approved: approved,
+        orderIdType: typeof orderId,
+        isNaN: isNaN(orderId)
+      });
+
       console.error(`=== ORDER APPROVAL DEBUG START ===`);
       console.error(`Fetching order with ID: ${orderId}`);
       
