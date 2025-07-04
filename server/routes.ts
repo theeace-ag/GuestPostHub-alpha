@@ -523,8 +523,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedOrder = await storage.updateOrder(id, {
         status: "submitted",
         postUrl,
-        proofOfWork,
-        proofImages: JSON.stringify(proofImages || []),
+        publisherNotes: proofOfWork,
+        publisherSubmittedAt: new Date(),
       });
 
       // Notify buyer about proof submission
@@ -882,7 +882,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
 
-      const updatedOrder = await storage.updateOrder(id, updates);
+      // Convert timestamp strings to Date objects if they exist
+      const processedUpdates = { ...updates };
+      if (processedUpdates.publisherSubmittedAt && typeof processedUpdates.publisherSubmittedAt === 'string') {
+        processedUpdates.publisherSubmittedAt = new Date(processedUpdates.publisherSubmittedAt);
+      }
+      if (processedUpdates.contentSubmittedAt && typeof processedUpdates.contentSubmittedAt === 'string') {
+        processedUpdates.contentSubmittedAt = new Date(processedUpdates.contentSubmittedAt);
+      }
+      if (processedUpdates.adminApprovedAt && typeof processedUpdates.adminApprovedAt === 'string') {
+        processedUpdates.adminApprovedAt = new Date(processedUpdates.adminApprovedAt);
+      }
+
+      const updatedOrder = await storage.updateOrder(id, processedUpdates);
+      
+      // Send notifications for status changes
+      if (processedUpdates.status === "submitted" && user?.role === "publisher") {
+        // Notify buyer about completion
+        await storage.createNotification({
+          userId: order.buyerId,
+          title: "Guest Post Completed",
+          message: `Publisher has completed your guest post for ${order.website.url}. Awaiting admin approval for payment release.`,
+          type: "order",
+        });
+        
+        // Notify admins about pending approval
+        const adminUsers = await storage.getAdminUsers();
+        for (const admin of adminUsers) {
+          await storage.createNotification({
+            userId: admin.id,
+            title: "Order Needs Approval",
+            message: `Order #${order.orderNumber} has been completed and needs admin approval for payment release.`,
+            type: "admin",
+          });
+        }
+      }
+      
       res.json(updatedOrder);
     } catch (error) {
       console.error("Error updating order:", error);
