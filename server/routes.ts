@@ -572,8 +572,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Order not found" });
       }
 
-      if (order.status !== "pending_approval") {
-        return res.status(400).json({ message: "Order is not pending approval" });
+      if (order.status !== "pending_approval" && order.status !== "submitted") {
+        return res.status(400).json({ message: `Order is not pending approval. Current status: ${order.status}` });
       }
 
       if (approved) {
@@ -770,132 +770,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Admin approve/reject order
-  app.patch('/api/admin/orders/:orderId/approve', isAuthenticated, async (req: any, res) => {
-    console.log(`[APPROVAL] Request received for order ${req.params.orderId}`);
-    try {
-      const userId = req.user.claims.sub;
-      const user = await storage.getUser(userId);
-      
-      console.log(`Admin approval request by user:`, user?.id, user?.role);
-      
-      if (user?.role !== "admin") {
-        return res.status(403).json({ message: "Admin access required" });
-      }
 
-      const orderId = parseInt(req.params.orderId);
-      const { approved, rejectionReason } = req.body;
-      
-      console.log(`Approval request - OrderID: ${orderId}, Approved: ${approved}, Body:`, req.body);
-
-      // TEST: Quick return to verify route is hit
-      return res.status(200).json({ 
-        message: "Route test", 
-        orderId: orderId, 
-        approved: approved,
-        orderIdType: typeof orderId,
-        isNaN: isNaN(orderId)
-      });
-
-      console.error(`=== ORDER APPROVAL DEBUG START ===`);
-      console.error(`Fetching order with ID: ${orderId}`);
-      
-      // Directly query the order to avoid complex join issues
-      const [orderResult] = await db
-        .select()
-        .from(ordersTable)
-        .where(eq(ordersTable.id, orderId));
-      
-      console.error(`Direct order query result:`, JSON.stringify(orderResult, null, 2));
-      
-      if (!orderResult) {
-        console.error(`Order ${orderId} not found`);
-        return res.status(404).json({ message: "Order not found" });
-      }
-
-      console.error(`Order ${orderId} status: "${orderResult.status}" (type: ${typeof orderResult.status})`);
-      console.error(`Status check: submitted="${orderResult.status === "submitted"}", pending_approval="${orderResult.status === "pending_approval"}"`);
-
-      if (orderResult.status !== "submitted" && orderResult.status !== "pending_approval") {
-        console.error(`Status validation failed for order ${orderId}. Status: "${orderResult.status}"`);
-        return res.status(400).json({ message: `Order is not pending approval. Current status: ${orderResult.status}` });
-      }
-      
-      console.error(`Order ${orderId} status validation passed`);
-
-      if (approved) {
-        // Approve order - set to payment pending
-        const updatedOrder = await storage.updateOrder(orderId, {
-          status: "payment_pending",
-        });
-
-        // Create notification for publisher
-        await storage.createNotification({
-          userId: orderResult.publisherId,
-          title: "Order Approved",
-          message: `Your order #${orderResult.orderNumber} has been approved! Payment is now pending and will be processed by the dev team.`,
-          type: "order_approved",
-          orderId: orderId,
-        });
-
-        // Create notification for admins
-        const adminUsers = await storage.getAdminUsers();
-        for (const admin of adminUsers) {
-          await storage.createNotification({
-            userId: admin.id,
-            title: "Payment Pending",
-            message: `Order #${orderResult.orderNumber} approved - payment to publisher pending confirmation.`,
-            type: "payment_pending",
-            orderId: orderId,
-          });
-        }
-
-        res.json({ message: "Order approved - payment pending", order: updatedOrder });
-      } else {
-        // Reject order - refund buyer
-        const refundAmount = parseFloat(orderResult.totalAmount);
-        await storage.updateWalletBalance(orderResult.buyerId, refundAmount.toString());
-        
-        // Update order status to refunded
-        const updatedOrder = await storage.updateOrder(orderId, {
-          status: "refunded",
-          rejectionReason: rejectionReason,
-          refundedAt: new Date(),
-        });
-
-        // Create transaction record for buyer
-        await storage.createTransaction({
-          userId: orderResult.buyerId,
-          amount: refundAmount.toString(),
-          type: "credit",
-          description: `Refund for rejected order #${orderResult.orderNumber}`,
-          orderId: orderId,
-        });
-
-        // Create notifications
-        await storage.createNotification({
-          userId: orderResult.buyerId,
-          title: "Order Refunded",
-          message: `Your order #${orderResult.orderNumber} has been rejected and refunded. Reason: ${rejectionReason}`,
-          type: "refund",
-          orderId: orderId,
-        });
-
-        await storage.createNotification({
-          userId: orderResult.publisherId,
-          title: "Order Rejected",
-          message: `Order #${orderResult.orderNumber} has been rejected by admin. Reason: ${rejectionReason}`,
-          type: "order_rejected",
-          orderId: orderId,
-        });
-
-        res.json({ message: "Order rejected and buyer refunded", order: updatedOrder });
-      }
-    } catch (error) {
-      console.error("Error approving/rejecting order:", error);
-      res.status(500).json({ message: "Failed to process order approval" });
-    }
-  });
 
   // Get payment pending orders for admin
   app.get('/api/admin/orders/payment-pending', isAuthenticated, async (req: any, res) => {
