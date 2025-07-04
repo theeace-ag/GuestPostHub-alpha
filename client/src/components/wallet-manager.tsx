@@ -228,6 +228,29 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
     },
   });
 
+  const fakeMoneyMutation = useMutation({
+    mutationFn: async (amount: string) => {
+      return await apiRequest("POST", "/api/wallet/add-fake-money", {
+        amount
+      });
+    },
+    onSuccess: (response: any) => {
+      toast({
+        title: "Fake Money Added",
+        description: `Fake money added for testing successfully!`,
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/wallet/balance"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/wallet/transactions"] });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to Add Fake Money",
+        description: error.message || "Please try again",
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleAddFunds = () => {
     if (!addAmount || parseFloat(addAmount) <= 0) {
       toast({
@@ -341,6 +364,20 @@ export function WalletManager({ triggerText = "Manage Wallet", triggerVariant = 
                           <CreditCard className="h-4 w-4 mr-2" />
                           {addFundsMutation.isPending ? "Processing..." : 
                            !isRazorpayLoaded ? "Loading Payment Gateway..." : "Add Funds"}
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          onClick={() => {
+                            if (addAmount && parseFloat(addAmount) > 0) {
+                              fakeMoneyMutation.mutate(addAmount);
+                              setIsAddOpen(false);
+                            }
+                          }}
+                          disabled={fakeMoneyMutation.isPending}
+                          className="flex-1"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          {fakeMoneyMutation.isPending ? "Adding..." : "Add Fake Money"}
                         </Button>
                         <Button
                           variant="outline"

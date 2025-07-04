@@ -32,12 +32,23 @@ export const userRoleEnum = pgEnum("user_role", ["buyer", "publisher", "admin"])
 // Order status enum
 export const orderStatusEnum = pgEnum("order_status", [
   "pending",
+  "payment_completed",
+  "content_submitted", // Buyer has submitted content
   "in_progress", 
   "submitted", // Publisher has submitted proof of work
+  "pending_approval", // Waiting for dev team approval
   "completed",
+  "payment_pending", // Publisher payment pending
   "disputed",
   "cancelled",
   "refunded"
+]);
+
+// Account type enum for banking details
+export const accountTypeEnum = pgEnum("account_type", [
+  "savings",
+  "current",
+  "salary"
 ]);
 
 // Website approval status enum
@@ -58,6 +69,21 @@ export const users = pgTable("users", {
   hasSelectedRole: boolean("has_selected_role").default(false),
   roleChangeCount: integer("role_change_count").default(0),
   walletBalance: decimal("wallet_balance", { precision: 10, scale: 2 }).default("0.00"),
+  hasBankingDetails: boolean("has_banking_details").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Banking details for publishers (India)
+export const bankingDetails = pgTable("banking_details", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id),
+  accountHolderName: varchar("account_holder_name", { length: 100 }).notNull(),
+  bankAccountNumber: varchar("bank_account_number", { length: 20 }).notNull(),
+  ifscCode: varchar("ifsc_code", { length: 11 }).notNull(),
+  bankName: varchar("bank_name", { length: 100 }).notNull(),
+  accountType: accountTypeEnum("account_type").notNull(),
+  isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -113,13 +139,28 @@ export const orders = pgTable("orders", {
   totalAmount: decimal("total_amount", { precision: 10, scale: 2 }).notNull(),
   status: orderStatusEnum("status").default("pending"),
   needsContent: boolean("needs_content").default(false),
-  contentProvided: boolean("content_provided").default(false),
-  postUrl: varchar("post_url", { length: 500 }),
-  requirements: text("requirements"),
+  
+  // Buyer content submission
+  blogContent: text("blog_content"), // Max 2000 chars - buyer submitted content
+  targetLink: varchar("target_link", { length: 500 }), // Link to be inserted
+  uploadedFile: varchar("uploaded_file", { length: 500 }), // Optional file upload path
+  contentSubmittedAt: timestamp("content_submitted_at"),
+  
+  // Publisher fulfillment
+  publishedUrl: varchar("published_url", { length: 500 }), // Final blog post URL
   publisherNotes: text("publisher_notes"),
-  proofOfWork: text("proof_of_work"), // Publisher's proof submission
-  proofImages: text("proof_images"), // JSON array of proof image URLs
-  rejectionReason: text("rejection_reason"), // Admin rejection reason
+  publisherSubmittedAt: timestamp("publisher_submitted_at"),
+  
+  // Admin approval
+  adminApprovedBy: varchar("admin_approved_by").references(() => users.id),
+  adminApprovedAt: timestamp("admin_approved_at"),
+  rejectionReason: text("rejection_reason"),
+  
+  // Order completion timestamps
+  completedAt: timestamp("completed_at"),
+  refundedAt: timestamp("refunded_at"),
+  
+  requirements: text("requirements"),
   autoRefundAt: timestamp("auto_refund_at"), // Auto-refund deadline (7 days)
   razorpayOrderId: varchar("razorpay_order_id", { length: 100 }),
   razorpayPaymentId: varchar("razorpay_payment_id", { length: 100 }),
@@ -144,6 +185,7 @@ export const transactions = pgTable("transactions", {
 export const notifications = pgTable("notifications", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull().references(() => users.id),
+  orderId: integer("order_id").references(() => orders.id),
   title: varchar("title", { length: 200 }).notNull(),
   message: text("message").notNull(),
   type: varchar("type", { length: 50 }).notNull(),
@@ -152,13 +194,21 @@ export const notifications = pgTable("notifications", {
 });
 
 // Relations
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
   websites: many(websites),
   buyerOrders: many(orders, { relationName: "buyer_orders" }),
   publisherOrders: many(orders, { relationName: "publisher_orders" }),
   cartItems: many(cartItems),
   transactions: many(transactions),
   notifications: many(notifications),
+  bankingDetails: one(bankingDetails),
+}));
+
+export const bankingDetailsRelations = relations(bankingDetails, ({ one }) => ({
+  user: one(users, {
+    fields: [bankingDetails.userId],
+    references: [users.id],
+  }),
 }));
 
 export const categoriesRelations = relations(categories, ({ many }) => ({
@@ -265,6 +315,12 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   createdAt: true,
 });
 
+export const insertBankingDetailsSchema = createInsertSchema(bankingDetails).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -280,3 +336,5 @@ export type Transaction = typeof transactions.$inferSelect;
 export type InsertTransaction = z.infer<typeof insertTransactionSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
+export type BankingDetails = typeof bankingDetails.$inferSelect;
+export type InsertBankingDetails = z.infer<typeof insertBankingDetailsSchema>;

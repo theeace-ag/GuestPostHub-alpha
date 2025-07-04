@@ -12,7 +12,7 @@ import Landing from "@/pages/landing";
 import BuyerDashboard from "@/pages/buyer-dashboard";
 import PublisherDashboard from "@/pages/publisher-dashboard";
 import AdminDashboard from "@/pages/admin-dashboard";
-import DevPortal from "@/pages/dev-portal";
+import DevPortal from "@/pages/dev-portal-complete";
 import Orders from "@/pages/orders";
 import Checkout from "@/pages/checkout";
 import WebsiteSubmission from "@/pages/website-submission";

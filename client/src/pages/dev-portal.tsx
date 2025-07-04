@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useToast } from "@/hooks/use-toast";
 import { Navigation } from "@/components/navigation";
+import { AdminOrderApproval } from "@/components/admin-order-approval";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   Table, 
   TableBody, 
@@ -138,7 +140,7 @@ export default function DevPortal() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Dev Team Portal</h1>
-            <p className="text-gray-600">Review and approve publisher website submissions</p>
+            <p className="text-gray-600">Review and approve publisher website submissions and orders</p>
           </div>
 
           {/* Stats Cards */}
@@ -188,11 +190,19 @@ export default function DevPortal() {
             </Card>
           </div>
 
-          {/* Search and Filter */}
-          <Card className="mb-6">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Website Review Queue</CardTitle>
+          {/* Main Content Tabs */}
+          <Tabs defaultValue="websites" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="websites">Website Approvals</TabsTrigger>
+              <TabsTrigger value="orders">Order Approvals</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="websites" className="space-y-6">
+              {/* Search and Filter */}
+              <Card className="mb-6">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle>Website Review Queue</CardTitle>
                 <div className="flex items-center space-x-3">
                   <div className="relative">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
@@ -389,6 +399,12 @@ export default function DevPortal() {
               )}
             </CardContent>
           </Card>
+            </TabsContent>
+            
+            <TabsContent value="orders" className="space-y-6">
+              <AdminOrderApproval />
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </div>

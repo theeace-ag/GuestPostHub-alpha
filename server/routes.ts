@@ -2,7 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertWebsiteSchema, insertCartItemSchema, insertOrderSchema } from "@shared/schema";
+import { insertWebsiteSchema, insertCartItemSchema, insertOrderSchema, insertBankingDetailsSchema } from "@shared/schema";
 import { z } from "zod";
 import Razorpay from "razorpay";
 
@@ -90,6 +90,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error switching role:", error);
       res.status(500).json({ message: "Failed to switch role" });
+    }
+  });
+
+  // Banking Details for Publishers
+  app.get('/api/banking-details', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== "publisher") {
+        return res.status(403).json({ message: "Only publishers can access banking details" });
+      }
+
+      const bankingDetails = await storage.getBankingDetails(userId);
+      res.json(bankingDetails);
+    } catch (error) {
+      console.error("Error fetching banking details:", error);
+      res.status(500).json({ message: "Failed to fetch banking details" });
+    }
+  });
+
+  app.post('/api/banking-details', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== "publisher") {
+        return res.status(403).json({ message: "Only publishers can set banking details" });
+      }
+
+      const validatedData = insertBankingDetailsSchema.parse({
+        ...req.body,
+        userId,
+      });
+
+      const bankingDetails = await storage.createBankingDetails(validatedData);
+      res.json(bankingDetails);
+    } catch (error) {
+      console.error("Error creating banking details:", error);
+      res.status(500).json({ message: "Failed to create banking details" });
+    }
+  });
+
+  app.patch('/api/banking-details', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== "publisher") {
+        return res.status(403).json({ message: "Only publishers can update banking details" });
+      }
+
+      const updates = insertBankingDetailsSchema.partial().parse(req.body);
+      const bankingDetails = await storage.updateBankingDetails(userId, updates);
+      
+      if (!bankingDetails) {
+        return res.status(404).json({ message: "Banking details not found" });
+      }
+
+      res.json(bankingDetails);
+    } catch (error) {
+      console.error("Error updating banking details:", error);
+      res.status(500).json({ message: "Failed to update banking details" });
     }
   });
 
@@ -330,6 +393,111 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Buyer submits content and requirements for order
+  app.patch('/api/orders/:id/submit-content', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const id = parseInt(req.params.id);
+      const { blogContent, targetLink, uploadedFile } = req.body;
+
+      // Validate content length
+      if (blogContent && blogContent.length > 2000) {
+        return res.status(400).json({ message: "Blog content must not exceed 2000 characters" });
+      }
+
+      // Get order to verify ownership
+      const order = await storage.getOrderById(id);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (user?.role !== "buyer" || order.buyerId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      if (order.status !== "payment_completed" && order.status !== "pending") {
+        return res.status(400).json({ message: "Content can only be submitted after payment" });
+      }
+
+      const updatedOrder = await storage.updateOrder(id, {
+        status: "content_submitted",
+        blogContent,
+        targetLink,
+        uploadedFile,
+        contentSubmittedAt: new Date(),
+      });
+
+      // Notify publisher about content submission
+      await storage.createNotification({
+        userId: order.publisherId,
+        title: "Content Submitted for Order",
+        message: `Buyer has submitted content for order on ${order.website.url}. You can now start working on the guest post.`,
+        type: "order",
+      });
+
+      res.json(updatedOrder);
+    } catch (error) {
+      console.error("Error submitting content:", error);
+      res.status(500).json({ message: "Failed to submit content" });
+    }
+  });
+
+  // Publisher submits fulfillment proof
+  app.patch('/api/orders/:id/submit-fulfillment', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const id = parseInt(req.params.id);
+      const { publishedUrl, publisherNotes } = req.body;
+
+      // Get order to verify ownership
+      const order = await storage.getOrderById(id);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      const user = await storage.getUser(userId);
+      if (user?.role !== "publisher" || order.publisherId !== userId) {
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      if (order.status !== "content_submitted" && order.status !== "in_progress") {
+        return res.status(400).json({ message: "Order cannot be submitted at this stage" });
+      }
+
+      const updatedOrder = await storage.updateOrder(id, {
+        status: "pending_approval",
+        publishedUrl,
+        publisherNotes,
+        publisherSubmittedAt: new Date(),
+      });
+
+      // Notify buyer about fulfillment submission
+      await storage.createNotification({
+        userId: order.buyerId,
+        title: "Guest Post Completed",
+        message: `Publisher has completed your guest post for ${order.website.url}. Awaiting admin approval for payment release.`,
+        type: "order",
+      });
+
+      // Notify admins about pending approval
+      const adminUsers = await storage.getAdminUsers();
+      for (const admin of adminUsers) {
+        await storage.createNotification({
+          userId: admin.id,
+          title: "Order Needs Approval",
+          message: `Order #${order.orderNumber} has been completed and needs admin approval for payment release.`,
+          type: "admin",
+        });
+      }
+
+      res.json(updatedOrder);
+    } catch (error) {
+      console.error("Error submitting fulfillment:", error);
+      res.status(500).json({ message: "Failed to submit fulfillment" });
+    }
+  });
+
   // Publisher submits proof of work
   app.patch('/api/orders/:id/submit-proof', isAuthenticated, async (req: any, res) => {
     try {
@@ -402,8 +570,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Order not found" });
       }
 
-      if (order.status !== "submitted") {
-        return res.status(400).json({ message: "Order is not in submitted state" });
+      if (order.status !== "pending_approval") {
+        return res.status(400).json({ message: "Order is not pending approval" });
       }
 
       if (approved) {
@@ -411,7 +579,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const publisherAmount = parseFloat(order.amount);
         
         await storage.updateOrder(id, {
-          status: "completed",
+          status: "payment_pending",
+          adminApprovedBy: userId,
+          adminApprovedAt: new Date(),
         });
 
         // Credit publisher's wallet
@@ -426,11 +596,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           description: `Payment for completed order #${order.orderNumber}`,
         });
 
-        // Notify publisher about payment
+        // Update order status to completed after payment release simulation
+        setTimeout(async () => {
+          await storage.updateOrder(id, { status: "completed" });
+          
+          // Notify publisher about payment
+          await storage.createNotification({
+            userId: order.publisherId,
+            title: "Payment Received",
+            message: `Payment of ₹${publisherAmount.toFixed(2)} has been transferred to your bank account for order #${order.orderNumber}. It will reflect within 24 hours.`,
+            type: "payment",
+          });
+        }, 2000); // Simulate 24 hour payment processing
+
+        // Notify publisher about pending payment
         await storage.createNotification({
           userId: order.publisherId,
-          title: "Payment Received",
-          message: `You've received $${publisherAmount.toFixed(2)} for order #${order.orderNumber}. Payment has been added to your wallet.`,
+          title: "Payment Pending",
+          message: `Your order #${order.orderNumber} has been approved. Payment of ₹${publisherAmount.toFixed(2)} will be transferred to your bank account within 24 hours.`,
           type: "payment",
         });
 
@@ -564,6 +747,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error processing auto-refunds:", error);
       res.status(500).json({ message: "Failed to process auto-refunds" });
+    }
+  });
+
+  // Get pending approval orders for admin
+  app.get('/api/admin/orders/pending-approval', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const orders = await storage.getOrders({ status: "pending_approval" });
+      res.json(orders);
+    } catch (error) {
+      console.error("Error fetching pending approval orders:", error);
+      res.status(500).json({ message: "Failed to fetch orders" });
+    }
+  });
+
+  // Admin approve/reject order
+  app.patch('/api/admin/orders/:orderId/approve', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const orderId = parseInt(req.params.orderId);
+      const { approved, rejectionReason } = req.body;
+
+      const order = await storage.getOrderById(orderId);
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      if (approved) {
+        // Approve order - release payment to publisher
+        const publisherAmount = parseFloat(order.amount);
+        await storage.updateWalletBalance(order.publisherId, publisherAmount.toString());
+        
+        // Update order status to completed
+        const updatedOrder = await storage.updateOrder(orderId, {
+          status: "completed",
+          completedAt: new Date(),
+        });
+
+        // Create transaction record for publisher
+        await storage.createTransaction({
+          userId: order.publisherId,
+          amount: publisherAmount.toString(),
+          type: "credit",
+          description: `Payment received for order #${order.orderNumber}`,
+          orderId: orderId,
+        });
+
+        // Create notification for publisher
+        await storage.createNotification({
+          userId: order.publisherId,
+          title: "Payment Released",
+          message: `Your payment of ₹${publisherAmount.toFixed(2)} for order #${order.orderNumber} has been released to your wallet.`,
+          type: "payment",
+          orderId: orderId,
+        });
+
+        res.json({ message: "Order approved and payment released", order: updatedOrder });
+      } else {
+        // Reject order - refund buyer
+        const refundAmount = parseFloat(order.totalAmount);
+        await storage.updateWalletBalance(order.buyerId, refundAmount.toString());
+        
+        // Update order status to refunded
+        const updatedOrder = await storage.updateOrder(orderId, {
+          status: "refunded",
+          rejectionReason: rejectionReason,
+          refundedAt: new Date(),
+        });
+
+        // Create transaction record for buyer
+        await storage.createTransaction({
+          userId: order.buyerId,
+          amount: refundAmount.toString(),
+          type: "credit",
+          description: `Refund for rejected order #${order.orderNumber}`,
+          orderId: orderId,
+        });
+
+        // Create notifications
+        await storage.createNotification({
+          userId: order.buyerId,
+          title: "Order Refunded",
+          message: `Your order #${order.orderNumber} has been rejected and refunded. Reason: ${rejectionReason}`,
+          type: "refund",
+          orderId: orderId,
+        });
+
+        await storage.createNotification({
+          userId: order.publisherId,
+          title: "Order Rejected",
+          message: `Order #${order.orderNumber} has been rejected by admin. Reason: ${rejectionReason}`,
+          type: "order_rejected",
+          orderId: orderId,
+        });
+
+        res.json({ message: "Order rejected and buyer refunded", order: updatedOrder });
+      }
+    } catch (error) {
+      console.error("Error approving/rejecting order:", error);
+      res.status(500).json({ message: "Failed to process order approval" });
     }
   });
 
@@ -742,6 +1037,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching wallet balance:", error);
       res.status(500).json({ message: "Failed to fetch wallet balance" });
+    }
+  });
+
+  // Development: Add fake money to wallet (for testing without Razorpay)
+  app.post('/api/wallet/add-fake-money', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { amount } = req.body;
+      
+      if (!amount || parseFloat(amount) <= 0) {
+        return res.status(400).json({ message: "Invalid amount" });
+      }
+
+      // Add fake money for development
+      const currentUser = await storage.getUser(userId);
+      const currentBalance = parseFloat(currentUser?.walletBalance || "0");
+      const newBalance = (currentBalance + parseFloat(amount)).toFixed(2);
+      
+      await storage.updateWalletBalance(userId, newBalance);
+      
+      // Create transaction record
+      await storage.createTransaction({
+        userId,
+        type: "credit",
+        amount: amount,
+        description: "Fake money added for development",
+        paymentMethod: "development",
+        paymentId: `dev_${Date.now()}`
+      });
+
+      // Create notification
+      await storage.createNotification({
+        userId,
+        title: "Fake Money Added",
+        message: `₹${parseFloat(amount).toFixed(2)} fake money has been added to your wallet for testing.`,
+        type: "payment",
+      });
+
+      res.json({ 
+        success: true, 
+        newBalance,
+        message: "Fake money added successfully for development"
+      });
+    } catch (error) {
+      console.error("Error adding fake money:", error);
+      res.status(500).json({ message: "Failed to add fake money" });
     }
   });
 

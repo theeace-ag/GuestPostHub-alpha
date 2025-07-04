@@ -6,6 +6,7 @@ import {
   orders,
   transactions,
   notifications,
+  bankingDetails,
   type User,
   type UpsertUser,
   type Website,
@@ -20,6 +21,8 @@ import {
   type InsertTransaction,
   type Notification,
   type InsertNotification,
+  type BankingDetails,
+  type InsertBankingDetails,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, ilike, gte, lte, inArray } from "drizzle-orm";
@@ -29,6 +32,11 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
   updateUser(id: string, updates: Partial<UpsertUser>): Promise<User | undefined>;
+  
+  // Banking details operations
+  getBankingDetails(userId: string): Promise<BankingDetails | undefined>;
+  createBankingDetails(bankingDetails: InsertBankingDetails): Promise<BankingDetails>;
+  updateBankingDetails(userId: string, updates: Partial<InsertBankingDetails>): Promise<BankingDetails | undefined>;
   
   // Category operations
   getCategories(): Promise<Category[]>;
@@ -120,6 +128,45 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return user;
+  }
+
+  // Banking details operations
+  async getBankingDetails(userId: string): Promise<BankingDetails | undefined> {
+    const [bankDetails] = await db
+      .select()
+      .from(bankingDetails)
+      .where(and(eq(bankingDetails.userId, userId), eq(bankingDetails.isActive, true)));
+    return bankDetails;
+  }
+
+  async createBankingDetails(bankingDetailsData: InsertBankingDetails): Promise<BankingDetails> {
+    // Deactivate existing banking details first
+    await db
+      .update(bankingDetails)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(bankingDetails.userId, bankingDetailsData.userId));
+
+    const [created] = await db
+      .insert(bankingDetails)
+      .values(bankingDetailsData)
+      .returning();
+
+    // Update user banking status
+    await db
+      .update(users)
+      .set({ hasBankingDetails: true, updatedAt: new Date() })
+      .where(eq(users.id, bankingDetailsData.userId));
+
+    return created;
+  }
+
+  async updateBankingDetails(userId: string, updates: Partial<InsertBankingDetails>): Promise<BankingDetails | undefined> {
+    const [updated] = await db
+      .update(bankingDetails)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(eq(bankingDetails.userId, userId), eq(bankingDetails.isActive, true)))
+      .returning();
+    return updated;
   }
 
   // Category operations
