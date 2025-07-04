@@ -148,6 +148,7 @@ export const orders = pgTable("orders", {
   
   // Publisher fulfillment
   publishedUrl: varchar("published_url", { length: 500 }), // Final blog post URL
+  postUrl: varchar("post_url", { length: 500 }), // Alternative field for post URL
   publisherNotes: text("publisher_notes"),
   publisherSubmittedAt: timestamp("publisher_submitted_at"),
   

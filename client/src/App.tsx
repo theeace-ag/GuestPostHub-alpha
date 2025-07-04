@@ -16,6 +16,7 @@ import DevPortal from "@/pages/dev-portal-complete";
 import Orders from "@/pages/orders";
 import Checkout from "@/pages/checkout";
 import WebsiteSubmission from "@/pages/website-submission";
+import BankingDetails from "@/pages/banking-details";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -95,6 +96,10 @@ function Router() {
 
         <Route path="/website-submission">
           {userRole === 'publisher' ? <WebsiteSubmission /> : <NotFound />}
+        </Route>
+
+        <Route path="/banking-details">
+          {userRole === 'publisher' ? <BankingDetails /> : <NotFound />}
         </Route>
 
         {/* Shared authenticated routes */}

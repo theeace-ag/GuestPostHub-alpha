@@ -890,6 +890,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Banking Details Routes
+  app.get('/api/banking-details', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const bankingDetails = await storage.getBankingDetails(userId);
+      res.json(bankingDetails);
+    } catch (error) {
+      console.error("Error fetching banking details:", error);
+      res.status(500).json({ message: "Failed to fetch banking details" });
+    }
+  });
+
+  app.post('/api/banking-details', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const data = insertBankingDetailsSchema.parse(req.body);
+      
+      const bankingDetails = await storage.createBankingDetails({
+        ...data,
+        userId,
+      });
+      
+      // Update user to mark as having banking details
+      await storage.updateUser(userId, { hasBankingDetails: true });
+      
+      res.json(bankingDetails);
+    } catch (error) {
+      console.error("Error creating banking details:", error);
+      res.status(500).json({ message: "Failed to create banking details" });
+    }
+  });
+
+  app.patch('/api/banking-details', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const updates = req.body;
+      
+      const bankingDetails = await storage.updateBankingDetails(userId, updates);
+      if (!bankingDetails) {
+        return res.status(404).json({ message: "Banking details not found" });
+      }
+      
+      res.json(bankingDetails);
+    } catch (error) {
+      console.error("Error updating banking details:", error);
+      res.status(500).json({ message: "Failed to update banking details" });
+    }
+  });
+
   // Notifications
   app.get('/api/notifications', isAuthenticated, async (req: any, res) => {
     try {

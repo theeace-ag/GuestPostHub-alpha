@@ -1,0 +1,1 @@
+ALTER TABLE "orders" ADD COLUMN "post_url" varchar(500);
