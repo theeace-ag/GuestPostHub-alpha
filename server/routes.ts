@@ -788,8 +788,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Order not found" });
       }
 
+      console.log(`Order ${orderId} status: "${order.status}" (type: ${typeof order.status})`);
+      console.log(`Status check: submitted="${order.status === "submitted"}", pending_approval="${order.status === "pending_approval"}"`);
+
       if (order.status !== "submitted" && order.status !== "pending_approval") {
-        return res.status(400).json({ message: "Order is not pending approval" });
+        return res.status(400).json({ message: `Order is not pending approval. Current status: ${order.status}` });
       }
 
       if (approved) {

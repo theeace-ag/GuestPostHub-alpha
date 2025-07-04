@@ -395,19 +395,31 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOrderById(id: number): Promise<(Order & { buyer: User; publisher: User; website: Website }) | undefined> {
-    const [order] = await db
-      .select({
-        ...orders,
-        buyer: { ...users, id: users.id },
-        publisher: { ...users, id: users.id },
-        website: websites,
-      })
+    // First get the order with website
+    const [orderWithWebsite] = await db
+      .select()
       .from(orders)
-      .innerJoin(users, eq(orders.buyerId, users.id))
       .innerJoin(websites, eq(orders.websiteId, websites.id))
       .where(eq(orders.id, id));
     
-    return order;
+    if (!orderWithWebsite) {
+      return undefined;
+    }
+    
+    // Fetch buyer and publisher separately
+    const buyer = await this.getUser(orderWithWebsite.orders.buyerId);
+    const publisher = await this.getUser(orderWithWebsite.websites.publisherId);
+    
+    if (!buyer || !publisher) {
+      return undefined;
+    }
+    
+    return {
+      ...orderWithWebsite.orders,
+      buyer,
+      publisher,
+      website: orderWithWebsite.websites
+    };
   }
 
   async createOrder(order: InsertOrder): Promise<Order> {
