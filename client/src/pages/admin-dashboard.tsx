@@ -29,6 +29,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { AdminOrderApproval } from "@/components/admin-order-approval";
+import { AdminPaymentConfirmation } from "@/components/admin-payment-confirmation";
 
 export default function AdminDashboard() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -218,10 +219,11 @@ export default function AdminDashboard() {
           <Card>
             <Tabs defaultValue="approvals" className="w-full">
               <CardHeader>
-                <TabsList className="grid w-full grid-cols-4">
+                <TabsList className="grid w-full grid-cols-5">
                   <TabsTrigger value="approvals">Pending Approvals</TabsTrigger>
                   <TabsTrigger value="users">User Management</TabsTrigger>
                   <TabsTrigger value="orders">Orders</TabsTrigger>
+                  <TabsTrigger value="payments">Payments</TabsTrigger>
                   <TabsTrigger value="analytics">Analytics</TabsTrigger>
                 </TabsList>
               </CardHeader>
@@ -361,6 +363,10 @@ export default function AdminDashboard() {
 
                 <TabsContent value="orders">
                   <AdminOrderApproval />
+                </TabsContent>
+
+                <TabsContent value="payments">
+                  <AdminPaymentConfirmation />
                 </TabsContent>
 
                 <TabsContent value="analytics">

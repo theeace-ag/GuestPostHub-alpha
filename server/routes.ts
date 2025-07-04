@@ -2,7 +2,9 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertWebsiteSchema, insertCartItemSchema, insertOrderSchema, insertBankingDetailsSchema } from "@shared/schema";
+import { insertWebsiteSchema, insertCartItemSchema, insertOrderSchema, insertBankingDetailsSchema, orders as ordersTable, users as usersTable, websites as websitesTable, bankingDetails as bankingDetailsTable } from "@shared/schema";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import Razorpay from "razorpay";
 
@@ -786,36 +788,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Order not found" });
       }
 
-      if (approved) {
-        // Approve order - release payment to publisher
-        const publisherAmount = parseFloat(order.amount);
-        await storage.updateWalletBalance(order.publisherId, publisherAmount.toString());
-        
-        // Update order status to completed
-        const updatedOrder = await storage.updateOrder(orderId, {
-          status: "completed",
-          completedAt: new Date(),
-        });
+      if (order.status !== "submitted" && order.status !== "pending_approval") {
+        return res.status(400).json({ message: "Order is not pending approval" });
+      }
 
-        // Create transaction record for publisher
-        await storage.createTransaction({
-          userId: order.publisherId,
-          amount: publisherAmount.toString(),
-          type: "credit",
-          description: `Payment received for order #${order.orderNumber}`,
-          orderId: orderId,
+      if (approved) {
+        // Approve order - set to payment pending
+        const updatedOrder = await storage.updateOrder(orderId, {
+          status: "payment_pending",
         });
 
         // Create notification for publisher
         await storage.createNotification({
           userId: order.publisherId,
-          title: "Payment Released",
-          message: `Your payment of ₹${publisherAmount.toFixed(2)} for order #${order.orderNumber} has been released to your wallet.`,
-          type: "payment",
+          title: "Order Approved",
+          message: `Your order #${order.orderNumber} has been approved! Payment is now pending and will be processed by the dev team.`,
+          type: "order_approved",
           orderId: orderId,
         });
 
-        res.json({ message: "Order approved and payment released", order: updatedOrder });
+        // Create notification for admins
+        const adminUsers = await storage.getAdminUsers();
+        for (const admin of adminUsers) {
+          await storage.createNotification({
+            userId: admin.id,
+            title: "Payment Pending",
+            message: `Order #${order.orderNumber} approved - payment to publisher pending confirmation.`,
+            type: "payment_pending",
+            orderId: orderId,
+          });
+        }
+
+        res.json({ message: "Order approved - payment pending", order: updatedOrder });
       } else {
         // Reject order - refund buyer
         const refundAmount = parseFloat(order.totalAmount);
@@ -859,6 +863,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error approving/rejecting order:", error);
       res.status(500).json({ message: "Failed to process order approval" });
+    }
+  });
+
+  // Get payment pending orders for admin
+  app.get('/api/admin/orders/payment-pending', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const orders = await storage.getOrders({ status: "payment_pending" });
+      
+      // Enhance with banking details
+      const enhancedOrders = await Promise.all(
+        orders.map(async (order) => {
+          const bankingDetails = await storage.getBankingDetails(order.publisherId);
+          return {
+            ...order,
+            publisher: {
+              ...order.publisher,
+              hasBankingDetails: !!bankingDetails,
+            },
+            bankingDetails: bankingDetails,
+          };
+        })
+      );
+
+      res.json(enhancedOrders);
+    } catch (error) {
+      console.error("Error fetching payment pending orders:", error);
+      res.status(500).json({ message: "Failed to fetch payment pending orders" });
+    }
+  });
+
+  // Admin confirm payment
+  app.patch('/api/admin/orders/:orderId/confirm-payment', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await storage.getUser(userId);
+      
+      if (user?.role !== "admin") {
+        return res.status(403).json({ message: "Admin access required" });
+      }
+
+      const orderId = parseInt(req.params.orderId);
+      const order = await storage.getOrderById(orderId);
+      
+      if (!order) {
+        return res.status(404).json({ message: "Order not found" });
+      }
+
+      if (order.status !== "payment_pending") {
+        return res.status(400).json({ message: "Order is not pending payment" });
+      }
+
+      // Process payment to publisher
+      const publisherAmount = parseFloat(order.amount);
+      await storage.updateWalletBalance(order.publisherId, publisherAmount.toString());
+      
+      // Update order status to completed
+      const updatedOrder = await storage.updateOrder(orderId, {
+        status: "completed",
+        completedAt: new Date(),
+      });
+
+      // Create transaction record for publisher
+      await storage.createTransaction({
+        userId: order.publisherId,
+        amount: publisherAmount.toString(),
+        type: "credit",
+        description: `Payment received for order #${order.orderNumber}`,
+        orderId: orderId,
+      });
+
+      // Create notification for publisher
+      await storage.createNotification({
+        userId: order.publisherId,
+        title: "Payment Released",
+        message: `Your payment of ₹${publisherAmount.toFixed(2)} for order #${order.orderNumber} has been released to your wallet.`,
+        type: "payment",
+        orderId: orderId,
+      });
+
+      res.json({ message: "Payment confirmed and released", order: updatedOrder });
+    } catch (error) {
+      console.error("Error confirming payment:", error);
+      res.status(500).json({ message: "Failed to confirm payment" });
     }
   });
 
