@@ -28,6 +28,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { isUnauthorizedError } from "@/lib/authUtils";
+import { AdminOrderApproval } from "@/components/admin-order-approval";
 
 export default function AdminDashboard() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -359,110 +360,7 @@ export default function AdminDashboard() {
                 </TabsContent>
 
                 <TabsContent value="orders">
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-xl font-bold text-gray-900">Order Management</h2>
-                      <div className="flex items-center space-x-4">
-                        <div className="relative">
-                          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                          <Input
-                            placeholder="Search orders..."
-                            className="pl-10 w-64"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {ordersLoading ? (
-                      <div className="text-center py-8">
-                        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                        <p className="mt-4 text-gray-600">Loading orders...</p>
-                      </div>
-                    ) : filteredOrders.length === 0 ? (
-                      <div className="text-center py-8">
-                        <ShoppingCart className="mx-auto h-12 w-12 text-gray-400" />
-                        <h3 className="mt-2 text-sm font-medium text-gray-900">No orders found</h3>
-                        <p className="mt-1 text-sm text-gray-500">
-                          {searchTerm ? 'Try adjusting your search terms.' : 'No orders have been placed yet.'}
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Order ID</TableHead>
-                              <TableHead>Buyer</TableHead>
-                              <TableHead>Website</TableHead>
-                              <TableHead>Publisher</TableHead>
-                              <TableHead>Amount</TableHead>
-                              <TableHead>Status</TableHead>
-                              <TableHead>Date</TableHead>
-                              <TableHead>Actions</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {filteredOrders.map((order: any) => (
-                              <TableRow key={order.id}>
-                                <TableCell className="font-mono text-sm">{order.orderNumber}</TableCell>
-                                <TableCell>
-                                  <div className="flex items-center space-x-2">
-                                    <div className="w-6 h-6 bg-gray-300 rounded-full flex items-center justify-center">
-                                      <span className="text-xs">
-                                        {order.buyer.firstName?.[0] || order.buyer.email?.[0] || 'U'}
-                                      </span>
-                                    </div>
-                                    <span className="text-sm">
-                                      {order.buyer.firstName || order.buyer.email?.split('@')[0] || 'Unknown'}
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="text-sm">
-                                    <p className="font-medium">{order.website.url}</p>
-                                    <p className="text-gray-600">{order.website.category?.name || 'General'}</p>
-                                  </div>
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex items-center space-x-2">
-                                    <div className="w-6 h-6 bg-gray-300 rounded-full flex items-center justify-center">
-                                      <span className="text-xs">
-                                        {order.publisher.firstName?.[0] || order.publisher.email?.[0] || 'U'}
-                                      </span>
-                                    </div>
-                                    <span className="text-sm">
-                                      {order.publisher.firstName || order.publisher.email?.split('@')[0] || 'Unknown'}
-                                    </span>
-                                  </div>
-                                </TableCell>
-                                <TableCell className="font-medium">${order.totalAmount}</TableCell>
-                                <TableCell>
-                                  <Badge className={`order-status-${order.status}`}>
-                                    {order.status.replace('_', ' ')}
-                                  </Badge>
-                                </TableCell>
-                                <TableCell className="text-gray-600">
-                                  {new Date(order.createdAt).toLocaleDateString()}
-                                </TableCell>
-                                <TableCell>
-                                  <div className="flex space-x-2">
-                                    <Button size="sm" variant="outline">
-                                      View Details
-                                    </Button>
-                                    <Button size="sm" variant="outline">
-                                      Message
-                                    </Button>
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
-                    )}
-                  </div>
+                  <AdminOrderApproval />
                 </TabsContent>
 
                 <TabsContent value="analytics">

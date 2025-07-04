@@ -36,7 +36,7 @@ export function AdminOrderApproval() {
   const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
 
   const { data: pendingOrders = [], isLoading } = useQuery({
-    queryKey: ["/api/admin/orders/pending-approval"],
+    queryKey: ["/api/admin/orders/pending"],
   });
 
   const approveOrderMutation = useMutation({
@@ -57,7 +57,7 @@ export function AdminOrderApproval() {
           ? "Payment will be released to publisher within 24 hours."
           : "Order has been rejected and buyer will be refunded.",
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/admin/orders/pending-approval"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/orders/pending"] });
       setIsRejectDialogOpen(false);
       setRejectionReason("");
       setSelectedOrder(null);
